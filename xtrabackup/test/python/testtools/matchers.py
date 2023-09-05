@@ -159,10 +159,7 @@ class DocTestMatches(object):
         self._checker = doctest.OutputChecker()
 
     def __str__(self):
-        if self.flags:
-            flagstr = ", flags=%d" % self.flags
-        else:
-            flagstr = ""
+        flagstr = ", flags=%d" % self.flags if self.flags else ""
         return 'DocTestMatches(%r%s)' % (self.want, flagstr)
 
     def _with_nl(self, actual):
@@ -204,8 +201,7 @@ class DoesNotStartWith(Mismatch):
         self.expected = expected
 
     def describe(self):
-        return "'%s' does not start with '%s'." % (
-            self.matchee, self.expected)
+        return f"'{self.matchee}' does not start with '{self.expected}'."
 
 
 class DoesNotEndWith(Mismatch):
@@ -220,8 +216,7 @@ class DoesNotEndWith(Mismatch):
         self.expected = expected
 
     def describe(self):
-        return "'%s' does not end with '%s'." % (
-            self.matchee, self.expected)
+        return f"'{self.matchee}' does not end with '{self.expected}'."
 
 
 class _BinaryComparison(object):
@@ -258,7 +253,7 @@ class _BinaryMismatch(Mismatch):
                 self._mismatch_string, pformat(self.expected),
                 pformat(self.other))
         else:
-            return "%s %s %s" % (left, self._mismatch_string,right)
+            return f"{left} {self._mismatch_string} {right}"
 
 
 class Equals(_BinaryComparison):
@@ -320,7 +315,7 @@ class MatchesAll(object):
         self.matchers = matchers
 
     def __str__(self):
-        return 'MatchesAll(%s)' % ', '.join(map(str, self.matchers))
+        return f"MatchesAll({', '.join(map(str, self.matchers))})"
 
     def match(self, matchee):
         results = []
@@ -328,10 +323,7 @@ class MatchesAll(object):
             mismatch = matcher.match(matchee)
             if mismatch is not None:
                 results.append(mismatch)
-        if results:
-            return MismatchesAll(results)
-        else:
-            return None
+        return MismatchesAll(results) if results else None
 
 
 class MismatchesAll(Mismatch):
@@ -342,8 +334,7 @@ class MismatchesAll(Mismatch):
 
     def describe(self):
         descriptions = ["Differences: ["]
-        for mismatch in self.mismatches:
-            descriptions.append(mismatch.describe())
+        descriptions.extend(mismatch.describe() for mismatch in self.mismatches)
         descriptions.append("]")
         return '\n'.join(descriptions)
 
@@ -355,14 +346,11 @@ class Not(object):
         self.matcher = matcher
 
     def __str__(self):
-        return 'Not(%s)' % (self.matcher,)
+        return f'Not({self.matcher})'
 
     def match(self, other):
         mismatch = self.matcher.match(other)
-        if mismatch is None:
-            return MatchedUnexpectedly(self.matcher, other)
-        else:
-            return None
+        return MatchedUnexpectedly(self.matcher, other) if mismatch is None else None
 
 
 class MatchedUnexpectedly(Mismatch):
@@ -405,19 +393,18 @@ class MatchesException(Matcher):
             return Mismatch('%r is not a %r' % (other[0], expected_class))
         if self._is_instance:
             if other[1].args != self.expected.args:
-                return Mismatch('%s has different arguments to %s.' % (
-                        _error_repr(other[1]), _error_repr(self.expected)))
+                return Mismatch(
+                    f'{_error_repr(other[1])} has different arguments to {_error_repr(self.expected)}.'
+                )
         elif self.value_re is not None:
             str_exc_value = str(other[1])
             if not re.match(self.value_re, str_exc_value):
-                return Mismatch(
-                    '"%s" does not match "%s".'
-                    % (str_exc_value, self.value_re))
+                return Mismatch(f'"{str_exc_value}" does not match "{self.value_re}".')
 
     def __str__(self):
         if self._is_instance:
-            return "MatchesException(%s)" % _error_repr(self.expected)
-        return "MatchesException(%s)" % repr(self.expected)
+            return f"MatchesException({_error_repr(self.expected)})"
+        return f"MatchesException({repr(self.expected)})"
 
 
 class StartsWith(Matcher):
@@ -431,7 +418,7 @@ class StartsWith(Matcher):
         self.expected = expected
 
     def __str__(self):
-        return "Starts with '%s'." % self.expected
+        return f"Starts with '{self.expected}'."
 
     def match(self, matchee):
         if not matchee.startswith(self.expected):
@@ -450,7 +437,7 @@ class EndsWith(Matcher):
         self.expected = expected
 
     def __str__(self):
-        return "Ends with '%s'." % self.expected
+        return f"Ends with '{self.expected}'."
 
     def match(self, matchee):
         if not matchee.endswith(self.expected):
@@ -474,12 +461,11 @@ class KeysEqual(Matcher):
             self.expected = list(expected)
 
     def __str__(self):
-        return "KeysEqual(%s)" % ', '.join(map(repr, self.expected))
+        return f"KeysEqual({', '.join(map(repr, self.expected))})"
 
     def match(self, matchee):
         expected = sorted(self.expected)
-        matched = Equals(expected).match(sorted(matchee.keys()))
-        if matched:
+        if matched := Equals(expected).match(sorted(matchee.keys())):
             return AnnotatedMismatch(
                 'Keys not equal',
                 _BinaryMismatch(expected, 'does not match', matchee))
@@ -514,7 +500,7 @@ class AnnotatedMismatch(MismatchDecorator):
         self.mismatch = mismatch
 
     def describe(self):
-        return '%s: %s' % (self.original.describe(), self.annotation)
+        return f'{self.original.describe()}: {self.annotation}'
 
 
 class Raises(Matcher):
@@ -590,13 +576,12 @@ class MatchesListwise(object):
 
     def match(self, values):
         mismatches = []
-        length_mismatch = Annotate(
-            "Length mismatch", Equals(len(self.matchers))).match(len(values))
-        if length_mismatch:
+        if length_mismatch := Annotate(
+            "Length mismatch", Equals(len(self.matchers))
+        ).match(len(values)):
             mismatches.append(length_mismatch)
         for matcher, value in zip(self.matchers, values):
-            mismatch = matcher.match(value)
-            if mismatch:
+            if mismatch := matcher.match(value):
                 mismatches.append(mismatch)
         if mismatches:
             return MismatchesAll(mismatches)
@@ -621,9 +606,7 @@ class MatchesStructure(object):
 
     @classmethod
     def fromExample(cls, example, *attributes):
-        kwargs = {}
-        for attr in attributes:
-            kwargs[attr] = Equals(getattr(example, attr))
+        kwargs = {attr: Equals(getattr(example, attr)) for attr in attributes}
         return cls(**kwargs)
 
     def update(self, **kws):
@@ -636,10 +619,8 @@ class MatchesStructure(object):
         return type(self)(**new_kws)
 
     def __str__(self):
-        kws = []
-        for attr, matcher in sorted(self.kws.iteritems()):
-            kws.append("%s=%s" % (attr, matcher))
-        return "%s(%s)" % (self.__class__.__name__, ', '.join(kws))
+        kws = [f"{attr}={matcher}" for attr, matcher in sorted(self.kws.iteritems())]
+        return f"{self.__class__.__name__}({', '.join(kws)})"
 
     def match(self, value):
         matchers = []
@@ -664,10 +645,10 @@ class MatchesRegex(object):
         for flag in dir(re):
             if len(flag) == 1:
                 if self.flags & getattr(re, flag):
-                    flag_arg.append('re.%s' % flag)
+                    flag_arg.append(f're.{flag}')
         if flag_arg:
             args.append('|'.join(flag_arg))
-        return '%s(%s)' % (self.__class__.__name__, ', '.join(args))
+        return f"{self.__class__.__name__}({', '.join(args)})"
 
     def match(self, value):
         if not re.match(self.pattern, value, self.flags):
@@ -697,60 +678,47 @@ class MatchesSetwise(object):
                     break
             else:
                 not_matched.append(value)
-        if not_matched or remaining_matchers:
+        if not_matched:
+            if not (remaining_matchers := list(remaining_matchers)):
+                return (
+                    Mismatch(
+                        f"There were {len(not_matched)} values left over: {not_matched}"
+                    )
+                    if len(not_matched) > 1
+                    else Mismatch(f"There was 1 value left over: {not_matched}")
+                )
+            common_length = min(len(remaining_matchers), len(not_matched))
+            if common_length == 0:
+                raise AssertionError("common_length can't be 0 here")
+            msg = (
+                f"There were {common_length} mismatches"
+                if common_length > 1
+                else "There was 1 mismatch"
+            )
+            if len(remaining_matchers) > len(not_matched):
+                extra_matchers = remaining_matchers[common_length:]
+                msg += f" and {len(extra_matchers)} extra matcher"
+                if len(extra_matchers) > 1:
+                    msg += "s"
+                msg += ': ' + ', '.join(map(str, extra_matchers))
+            elif len(not_matched) > len(remaining_matchers):
+                extra_values = not_matched[common_length:]
+                msg += f" and {len(extra_values)} extra value"
+                if len(extra_values) > 1:
+                    msg += "s"
+                msg += f': {str(extra_values)}'
+            return Annotate(
+                msg, MatchesListwise(remaining_matchers[:common_length])
+                ).match(not_matched[:common_length])
+        elif remaining_matchers:
             remaining_matchers = list(remaining_matchers)
-            # There are various cases that all should be reported somewhat
-            # differently.
-
-            # There are two trivial cases:
-            # 1) There are just some matchers left over.
-            # 2) There are just some values left over.
-
-            # Then there are three more interesting cases:
-            # 3) There are the same number of matchers and values left over.
-            # 4) There are more matchers left over than values.
-            # 5) There are more values left over than matchers.
-
-            if len(not_matched) == 0:
-                if len(remaining_matchers) > 1:
-                    msg = "There were %s matchers left over: " % (
-                        len(remaining_matchers),)
-                else:
-                    msg = "There was 1 matcher left over: "
-                msg += ', '.join(map(str, remaining_matchers))
-                return Mismatch(msg)
-            elif len(remaining_matchers) == 0:
-                if len(not_matched) > 1:
-                    return Mismatch(
-                        "There were %s values left over: %s" % (
-                            len(not_matched), not_matched))
-                else:
-                    return Mismatch(
-                        "There was 1 value left over: %s" % (
-                            not_matched, ))
-            else:
-                common_length = min(len(remaining_matchers), len(not_matched))
-                if common_length == 0:
-                    raise AssertionError("common_length can't be 0 here")
-                if common_length > 1:
-                    msg = "There were %s mismatches" % (common_length,)
-                else:
-                    msg = "There was 1 mismatch"
-                if len(remaining_matchers) > len(not_matched):
-                    extra_matchers = remaining_matchers[common_length:]
-                    msg += " and %s extra matcher" % (len(extra_matchers), )
-                    if len(extra_matchers) > 1:
-                        msg += "s"
-                    msg += ': ' + ', '.join(map(str, extra_matchers))
-                elif len(not_matched) > len(remaining_matchers):
-                    extra_values = not_matched[common_length:]
-                    msg += " and %s extra value" % (len(extra_values), )
-                    if len(extra_values) > 1:
-                        msg += "s"
-                    msg += ': ' + str(extra_values)
-                return Annotate(
-                    msg, MatchesListwise(remaining_matchers[:common_length])
-                    ).match(not_matched[:common_length])
+            msg = (
+                f"There were {len(remaining_matchers)} matchers left over: "
+                if len(remaining_matchers) > 1
+                else "There was 1 matcher left over: "
+            )
+            msg += ', '.join(map(str, remaining_matchers))
+            return Mismatch(msg)
 
 
 class AfterPreproccessing(object):
@@ -771,15 +739,12 @@ class AfterPreproccessing(object):
 
     def _str_preprocessor(self):
         if isinstance(self.preprocessor, types.FunctionType):
-            return '<function %s>' % self.preprocessor.__name__
+            return f'<function {self.preprocessor.__name__}>'
         return str(self.preprocessor)
 
     def __str__(self):
-        return "AfterPreproccessing(%s, %s)" % (
-            self._str_preprocessor(), self.matcher)
+        return f"AfterPreproccessing({self._str_preprocessor()}, {self.matcher})"
 
     def match(self, value):
         value = self.preprocessor(value)
-        return Annotate(
-            "after %s" % self._str_preprocessor(),
-            self.matcher).match(value)
+        return Annotate(f"after {self._str_preprocessor()}", self.matcher).match(value)

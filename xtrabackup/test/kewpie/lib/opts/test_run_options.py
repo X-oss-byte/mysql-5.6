@@ -37,10 +37,7 @@ def comma_list_split(option, opt, value, parser):
     # don't deal with a dangling ',' in our list
     if '' in input_list:
         input_list.remove('')
-    if cur_list:
-        value_list = cur_list + input_list 
-    else:
-        value_list = input_list 
+    value_list = cur_list + input_list if cur_list else input_list
     setattr(parser.values, option.dest, value_list)
 
 def get_abspath(option, opt, value, parser):

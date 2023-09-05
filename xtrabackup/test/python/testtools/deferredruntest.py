@@ -51,8 +51,7 @@ class SynchronousDeferredRunTest(_DeferredRunTest):
     def _run_user(self, function, *args):
         d = defer.maybeDeferred(function, *args)
         d.addErrback(self._got_user_failure)
-        result = extract_result(d)
-        return result
+        return extract_result(d)
 
 
 def run_with_log_observers(observers, function, *args, **kwargs):
@@ -190,7 +189,7 @@ class AsynchronousDeferredRunTest(_DeferredRunTest):
 
         d = self._run_user(self.case._run_setup, self.result)
         d.addCallback(set_up_done)
-        d.addBoth(lambda ignored: len(fails) == 0)
+        d.addBoth(lambda ignored: not fails)
         return d
 
     def _log_user_exception(self, e):
@@ -235,15 +234,13 @@ class AsynchronousDeferredRunTest(_DeferredRunTest):
             successful = False
             for debug_info in unhandled:
                 f = debug_info.failResult
-                info = debug_info._getDebugTracebacks()
-                if info:
+                if info := debug_info._getDebugTracebacks():
                     self.case.addDetail(
                         'unhandled-error-in-deferred-debug',
                         text_content(info))
                 self._got_user_failure(f, 'unhandled-error-in-deferred')
 
-        junk = spinner.clear_junk()
-        if junk:
+        if junk := spinner.clear_junk():
             successful = False
             self._log_user_exception(UncleanReactorError(junk))
 
@@ -328,8 +325,5 @@ class UncleanReactorError(Exception):
 
     def _get_junk_info(self, junk):
         from twisted.internet.base import DelayedCall
-        if isinstance(junk, DelayedCall):
-            ret = str(junk)
-        else:
-            ret = repr(junk)
+        ret = str(junk) if isinstance(junk, DelayedCall) else repr(junk)
         return '  %s\n' % (ret,)

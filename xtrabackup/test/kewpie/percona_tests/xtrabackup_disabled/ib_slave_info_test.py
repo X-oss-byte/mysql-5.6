@@ -43,43 +43,43 @@ class basicTest(mysqlBaseTestCase):
 
     def test_ib_incremental(self):
         self.servers = servers
-        logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
-            table_name = "`test`"
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
+        table_name = "`test`"
 
-            # populate our server with a test bed
-            test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
-            retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
+        # populate our server with a test bed
+        test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
+        retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
 
             # take a backup
             # This should fail as slave-info *and* no lock
             # are incompatible
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--port=%d" %master_server.master_port
-                  , "--host=127.0.0.1"
-                  , "--no-timestamp"
-                  , "--slave-info"
-                  , "--no-lock"
-                  , "--ibbackup=%s" %xtrabackup
-                  , backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            logging.test_debug("Backup retcode:  %d" %(retcode))
-            logging.test_debug("Backup output:  %s" %(output))
-            self.assertEqual(retcode,1,output)
-            expected_output = "--slave-info is used with --no-lock but without --safe-slave-backup. The binlog position cannot be consistent with the backup data."
-            self.assertEqual(output.strip(), expected_output, msg=output)
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            "--port=%d" % master_server.master_port,
+            "--host=127.0.0.1",
+            "--no-timestamp",
+            "--slave-info",
+            "--no-lock",
+            f"--ibbackup={xtrabackup}",
+            backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        logging = test_executor.logging
+        logging.test_debug("Backup retcode:  %d" %(retcode))
+        logging.test_debug(f"Backup output:  {output}")
+        self.assertEqual(retcode,1,output)
+        expected_output = "--slave-info is used with --no-lock but without --safe-slave-backup. The binlog position cannot be consistent with the backup data."
+        self.assertEqual(output.strip(), expected_output, msg=output)
 
             
             

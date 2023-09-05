@@ -91,7 +91,7 @@ class portManager:
                 desired_port = desired_port + 1
                 if desired_port >= max_port_value:
                     desired_port = min_port_value
-                attempts_remain = attempts_remain - 1
+                attempts_remain -= 1
         self.logging.error("Failed to assign a port in %d attempts" %attempt_count)
         sys.exit(1)
 
@@ -106,10 +106,7 @@ class portManager:
         """
         # check existing ports dbqp has created
         dbqp_ports = self.check_dbqp_ports()
-        if port not in dbqp_ports and not self.is_port_used(port):
-            return 1
-        else:
-            return 0
+        return 1 if port not in dbqp_ports and not self.is_port_used(port) else 0
 
     def is_port_used(self, port):
         """ See if a given port is used on the system """
@@ -125,7 +122,6 @@ class portManager:
                 # like we see with freebsd
                 if entry.startswith('Active'):
                     good_data = 0
-                    pass
                 else:
                     if self.system_manager.cur_os in [ 'FreeBSD' 
                                                      , 'Darwin' 
@@ -134,10 +130,7 @@ class portManager:
                     else:
                         split_token = ':'
                     port_candidate = entry.split()[3].split(split_token)[-1].strip()
-                    if port_candidate.isdigit():
-                        used_port = int(port_candidate)
-                    else:
-                        used_port = None # not a value we can use
+                    used_port = int(port_candidate) if port_candidate.isdigit() else None
                 if port == used_port:
                     if entry.split()[-1] != "TIME_WAIT":
                         return 1
@@ -150,12 +143,12 @@ class portManager:
             dbqp_port_NNNN.  Existence indicates said port is 'locked'
 
         """
-        used_ports = []
         tmp_files = os.listdir('/tmp')
-        for tmp_file in tmp_files:
-            if tmp_file.startswith('dbqp_port'):
-                used_ports.append(int(tmp_file.split('_')[-1]))
-        return used_ports
+        return [
+            int(tmp_file.split('_')[-1])
+            for tmp_file in tmp_files
+            if tmp_file.startswith('dbqp_port')
+        ]
 
     def assign_port(self, owner, port):
         """Assigns a port - create a tmpfile
@@ -164,9 +157,8 @@ class portManager:
 
         """
 
-        out_file = open(self.get_file_name(port),'w')
-        out_file.write("%s:%d\n" %(owner, port))
-        out_file.close()
+        with open(self.get_file_name(port),'w') as out_file:
+            out_file.write("%s:%d\n" %(owner, port))
 
     def free_ports(self, portlist):
        """ Clean up our ports """

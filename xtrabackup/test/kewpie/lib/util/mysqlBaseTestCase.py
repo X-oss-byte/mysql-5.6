@@ -57,16 +57,15 @@ class mysqlBaseTestCase(unittest.TestCase):
     # This is where we add methods that enable a test to do magic : )
 
     def execute_cmd(self, cmd, stdout_path, exec_path=None, get_output=False):
-        stdout_file = open(stdout_path,'w')
-        cmd_subproc = subprocess.Popen( cmd
-                                      , shell=True
-                                      , cwd=exec_path
-                                      , stdout = stdout_file
-                                      , stderr = subprocess.STDOUT
-                                      )
-        cmd_subproc.wait()
-        retcode = cmd_subproc.returncode
-        stdout_file.close()
+        with open(stdout_path,'w') as stdout_file:
+            cmd_subproc = subprocess.Popen( cmd
+                                          , shell=True
+                                          , cwd=exec_path
+                                          , stdout = stdout_file
+                                          , stderr = subprocess.STDOUT
+                                          )
+            cmd_subproc.wait()
+            retcode = cmd_subproc.returncode
         if get_output:
             data_file = open(stdout_path,'r')
             output = ''.join(data_file.readlines())
@@ -80,11 +79,9 @@ class mysqlBaseTestCase(unittest.TestCase):
     
         """
         results = []
-        query = "SHOW TABLES IN %s" %(schema)
+        query = f"SHOW TABLES IN {schema}"
         retcode, table_set = self.execute_query(query, server)
-        for table_data in table_set:
-            table_name = table_data[0]
-            results.append(table_name)
+        results.extend(table_data[0] for table_data in table_set)
         return results
 
     def check_slaves_by_query( self
@@ -105,9 +102,7 @@ class mysqlBaseTestCase(unittest.TestCase):
 
         """
         comp_results = {}
-        if expected_result:
-            pass # don't bother getting it
-        else:
+        if not expected_result:
             # run against master for 'good' value
             retcode, expected_result = self.execute_query(query, master_server)
         for server in other_servers:
@@ -116,19 +111,14 @@ class mysqlBaseTestCase(unittest.TestCase):
             #                                                     , expected_result 
             #                                                     , slave_result_
             #                                                       )
-    
-            if not expected_result == slave_result:
-                comp_data = "%s: expected_result= %s | slave_result= %s" % ( server.name 
-                                                                           , expected_result 
-                                                                           , slave_result
-                                                                           )
+
+            if expected_result != slave_result:
+                comp_data = f"{server.name}: expected_result= {expected_result} | slave_result= {slave_result}"
                 if comp_results.has_key(server.name):
                     comp_results[server.name].append(comp_data)
                 else:
                     comp_results[server.name]=[comp_data]
-        if comp_results:
-            return comp_results
-        return None
+        return comp_results if comp_results else None
  
 
     def check_slaves_by_checksum( self
@@ -151,28 +141,22 @@ class mysqlBaseTestCase(unittest.TestCase):
         for server in other_servers:
             for schema in schemas:
                 for table in self.get_tables(master_server, schema):
-                    query = "CHECKSUM TABLE %s.%s" %(schema, table)
+                    query = f"CHECKSUM TABLE {schema}.{table}"
                     retcode, master_checksum = self.execute_query(query, master_server)
                     retcode, slave_checksum = self.execute_query(query, server)
-               
-                    logging.test_debug ("%s: master_checksum= %s | slave_checksum= %s" % ( table
-                                                                           , master_checksum
-                                                                           , slave_checksum
-                                                                           ))
+
+                    logging.test_debug(
+                        f"{table}: master_checksum= {master_checksum} | slave_checksum= {slave_checksum}"
+                    )
                     logging.test_debug( '#'*80)
 
-                    if not master_checksum == slave_checksum:
-                        comp_data = "%s: master_checksum= %s | slave_checksum= %s" % ( table
-                                                                                     , master_checksum
-                                                                                     , slave_checksum
-                                                                                     )
+                    if master_checksum != slave_checksum:
+                        comp_data = f"{table}: master_checksum= {master_checksum} | slave_checksum= {slave_checksum}"
                         if comp_results.has_key(server.name):
                             comp_results[server.name].append(comp_data)
                         else:
                             comp_results[server.name]=[comp_data]
-        if comp_results:
-            return comp_results
-        return None
+        return comp_results if comp_results else None
 
 
     def take_mysqldump( self
@@ -207,34 +191,25 @@ class mysqlBaseTestCase(unittest.TestCase):
 
     def diff_dumpfiles(self, orig_file_path, new_file_path):
         """ diff two dumpfiles useful for comparing servers """ 
-        orig_file = open(orig_file_path,'r')
-        restored_file = open(new_file_path,'r')
-        orig_file_data = []
-        rest_file_data = []
-        orig_file_data= self.filter_data(orig_file.readlines(),'Dump completed')
-        rest_file_data= self.filter_data(restored_file.readlines(),'Dump completed') 
-        
-        server_diff = difflib.unified_diff( orig_file_data
-                                          , rest_file_data
-                                          , fromfile=orig_file_path
-                                          , tofile=new_file_path
-                                          )
-        diff_output = []
-        for line in server_diff:
-            diff_output.append(line)
-        output = '\n'.join(diff_output)
-        orig_file.close()
+        with open(orig_file_path,'r') as orig_file:
+            restored_file = open(new_file_path,'r')
+            orig_file_data = []
+            rest_file_data = []
+            orig_file_data= self.filter_data(orig_file.readlines(),'Dump completed')
+            rest_file_data= self.filter_data(restored_file.readlines(),'Dump completed') 
+
+            server_diff = difflib.unified_diff( orig_file_data
+                                              , rest_file_data
+                                              , fromfile=orig_file_path
+                                              , tofile=new_file_path
+                                              )
+            diff_output = list(server_diff)
+            output = '\n'.join(diff_output)
         restored_file.close()
-        return (diff_output==[]), output
+        return not diff_output, output
 
     def filter_data(self, input_data, filter_text ):
-        return_data = []
-        for line in input_data:
-            if filter_text in line.strip():
-                pass
-            else:
-                return_data.append(line)
-        return return_data
+        return [line for line in input_data if filter_text not in line.strip()]
 
     def execute_query( self
                      , query
@@ -320,31 +295,28 @@ class mysqlBaseTestCase(unittest.TestCase):
 
     def execute_randgen(self, test_cmd, test_executor, server, schema='test'):
         randgen_outfile = os.path.join(test_executor.logdir,'randgen.out')
-        randgen_output = open(randgen_outfile,'w')
-        server_type = test_executor.master_server.type
-        if server_type in ['percona','galera']:
-            # it is mysql for dbd::perl purposes
-            server_type = 'mysql'
-        dsn = "--dsn=dbi:%s:host=127.0.0.1:port=%d:user=root:password="":database=%s" %( server_type
-                                                                                       , server.master_port
-                                                                                       , schema)
-        randgen_cmd = " ".join([test_cmd, dsn])
-        randgen_subproc = subprocess.Popen( randgen_cmd
-                                          , shell=True
-                                          , cwd=test_executor.system_manager.randgen_path
-                                          , env=test_executor.working_environment
-                                          , stdout = randgen_output
-                                          , stderr = subprocess.STDOUT
-                                          )
-        randgen_subproc.wait()
-        retcode = randgen_subproc.returncode     
-        randgen_output.close()
-
-        randgen_file = open(randgen_outfile,'r')
-        output = ''.join(randgen_file.readlines())
-        randgen_file.close()
-        if retcode == 0:
-            if not test_executor.verbose:
+        with open(randgen_outfile,'w') as randgen_output:
+            server_type = test_executor.master_server.type
+            if server_type in ['percona','galera']:
+                # it is mysql for dbd::perl purposes
+                server_type = 'mysql'
+            dsn = "--dsn=dbi:%s:host=127.0.0.1:port=%d:user=root:password="":database=%s" %( server_type
+                                                                                           , server.master_port
+                                                                                           , schema)
+            randgen_cmd = " ".join([test_cmd, dsn])
+            randgen_subproc = subprocess.Popen( randgen_cmd
+                                              , shell=True
+                                              , cwd=test_executor.system_manager.randgen_path
+                                              , env=test_executor.working_environment
+                                              , stdout = randgen_output
+                                              , stderr = subprocess.STDOUT
+                                              )
+            randgen_subproc.wait()
+            retcode = randgen_subproc.returncode
+        with open(randgen_outfile,'r') as randgen_file:
+            output = ''.join(randgen_file.readlines())
+        if not test_executor.verbose:
+            if retcode == 0:
                 output = None
         return retcode, output
 
@@ -374,14 +346,14 @@ class mysqlBaseTestCase(unittest.TestCase):
         # if we use shell=True, we need to supply a string vs. a seq.
         if shell_flag:
             cmd_sequence = " ".join(cmd_sequence)
-        randgen_subproc = subprocess.Popen( cmd_sequence 
-                                          , cwd=test_executor.system_manager.randgen_path
-                                          , env=test_executor.working_environment
-                                          , shell=shell_flag
-                                          , stdout = randgen_output
-                                          , stderr = subprocess.STDOUT 
-                                          )
-        return randgen_subproc
+        return subprocess.Popen(
+            cmd_sequence,
+            cwd=test_executor.system_manager.randgen_path,
+            env=test_executor.working_environment,
+            shell=shell_flag,
+            stdout=randgen_output,
+            stderr=subprocess.STDOUT,
+        )
 
     def find_backup_path(self, output):
         """ Determine xtrabackup directory from output """

@@ -55,7 +55,7 @@ class testCase:
         self.testname = test_name
         self.suitename = suite_name
         self.suitepath = suite_path
-        self.fullname = "%s.%s" %(suite_name, test_name)
+        self.fullname = f"{suite_name}.{test_name}"
         self.testpath = test_path
         self.resultpath = result_path
 
@@ -79,14 +79,11 @@ class testCase:
         self.disable = disable
         self.innodb_test  = innodb_test
         self.need_debug = need_debug
-        
+
         self.system_manager.logging.debug_class(self)
 
     def should_run(self):
-        if self.skip_flag or self.disable:
-            return 0
-        else:
-            return 1
+        return 0 if self.skip_flag or self.disable else 1
 
  
         
@@ -110,7 +107,7 @@ class testManager(test_management.testManager):
         
         """
 
-        self.system_manager.logging.verbose("Processing suite: %s" %(suite_dir))
+        self.system_manager.logging.verbose(f"Processing suite: {suite_dir}")
 
         # Generate our test and result files:
         testdir = os.path.join(suite_dir, 't')
@@ -126,7 +123,7 @@ class testManager(test_management.testManager):
         # Get the 'name' of the suite.  This can require some processing
         # But the name is useful for reporting and whatnot
         suite_name = self.get_suite_name(suite_dir)
-        
+
         # Get the contents of the testdir and filter it accordingly
         # This applies do-test / skip-test filters and any specific
         # test case names        
@@ -134,7 +131,7 @@ class testManager(test_management.testManager):
         # sort our list if no individual tests were specified
         if not self.desired_tests:
             testlist.sort()
-                       
+
         # gather deeper information on tests we are interested in
         if testlist:
             # We have tests we want to process, we gather additional information
@@ -160,9 +157,11 @@ class testManager(test_management.testManager):
         
         test_server_options = suite_options
         test_name = test_case.replace('.test','')
-        self.system_manager.logging.verbose("Processing test: %s.%s" %(suite_name,test_name))
+        self.system_manager.logging.verbose(
+            f"Processing test: {suite_name}.{test_name}"
+        )
 
-        
+
         # Fix this , create a testCase with gather_test_data() passed
         # as the argument
         # Ensure we pass everything we need and use it all
@@ -182,7 +181,7 @@ class testManager(test_management.testManager):
             cnf_path=suite_cnf_path
         test_case = testCase(self.system_manager, test_case, test_name, suite_name, 
                              suite_dir, test_server_options,test_path, result_path,
-                             master_sh=master_sh, cnf_path=cnf_path, debug=self.debug)      
+                             master_sh=master_sh, cnf_path=cnf_path, debug=self.debug)
         return test_case
 
 
@@ -201,14 +200,11 @@ class testManager(test_management.testManager):
         """
 
         test_path = os.path.join(testdir,test_case)
-        result_file_name = test_name+'.result'       
+        result_file_name = f'{test_name}.result'
         result_path = self.find_result_path(resultdir, result_file_name)
         comment = None
         master_sh_path = test_path.replace('.test','-master.sh')
-        if os.path.exists(master_sh_path):
-            master_sh = master_sh_path 
-        else:
-            master_sh = None
+        master_sh = master_sh_path if os.path.exists(master_sh_path) else None
         master_opt_path = test_path.replace('.test', '-master.opt')
         config_file_path = test_path.replace('.test', '.cnf')
         # NOTE:  this currently makes suite level server options additive 
@@ -239,15 +235,19 @@ class testManager(test_management.testManager):
         """
         # We expect suite to be a path name, no fuzzy searching
         if not os.path.exists(suite_dir):
-            self.system_manager.logging.error("Suite: %s does not exist" %(suite_dir))
+            self.system_manager.logging.error(f"Suite: {suite_dir} does not exist")
             sys.exit(1)
-                
+
         # Ensure our test and result directories are present
         if not os.path.exists(testdir):
-            self.system_manager.logging.error("Suite: %s does not have a 't' directory (expected location for test files)" %(suite_dir))
+            self.system_manager.logging.error(
+                f"Suite: {suite_dir} does not have a 't' directory (expected location for test files)"
+            )
             sys.exit(1)
         if not os.path.exists(resultdir):
-            self.system_manager.logging.error("Suite: %s does not have an 'r' directory (expected location for result files)" %(suite_dir))
+            self.system_manager.logging.error(
+                f"Suite: {suite_dir} does not have an 'r' directory (expected location for result files)"
+            )
             sys.exit(1)
 
     def get_suite_name(self, suite_dir):
@@ -266,11 +266,11 @@ class testManager(test_management.testManager):
         if suite_dir.endswith('/'):
             suite_dir=suite_dir[:-1]
         suite_dir_root,suite_dir_basename = os.path.split(suite_dir)
-        if suite_dir_basename == 'tests' or suite_dir_basename == 'drizzle-tests':
+        if suite_dir_basename in ['tests', 'drizzle-tests']:
             suite_name = os.path.basename(suite_dir_root)
         else:
             suite_name = suite_dir_basename
-        self.system_manager.logging.debug("Suite_name:  %s" %(suite_name))
+        self.system_manager.logging.debug(f"Suite_name:  {suite_name}")
         return suite_name
 
     def process_suite_options(self, suite_dir):
@@ -396,13 +396,10 @@ class testManager(test_management.testManager):
             handle this / break it down into proper chunks
 
         """
-        server_reqs = []
         # We expect to see a list of lists and throw away the 
         # enclosing brackets
         option_sets = data_string[1:-1].strip().split(',')
-        for option_set in option_sets:
-            server_reqs.append([option_set[1:-1].strip()])
-        return server_reqs
+        return [[option_set[1:-1].strip()] for option_set in option_sets]
 
     def testlist_filter(self, testlist):
         """ Filter our list of testdir contents based on several 
@@ -417,18 +414,16 @@ class testManager(test_management.testManager):
         # We want only .test files
         # Possible TODO:  allow alternate test extensions
         testlist = [test_file for test_file in testlist if test_file.endswith('.test')]
-         
+
         # Search for specific test names
         if self.desired_tests: # We have specific, named tests we want from the suite(s)
-           tests_to_use = []
-           for test in self.desired_tests:
-               if test.endswith('.test'): 
-                   pass
-               else:
-                   test = test+'.test'
-               if test in testlist:
-                   tests_to_use.append(test)
-           testlist = tests_to_use
+            tests_to_use = []
+            for test in self.desired_tests:
+                if not test.endswith('.test'):
+                    test = f'{test}.test'
+                if test in testlist:
+                    tests_to_use.append(test)
+            testlist = tests_to_use
 
         # TODO:  Allow for regex?
         # Apply do-test filter
@@ -461,10 +456,10 @@ class testManager(test_management.testManager):
             if the test is disabled.
         
         """
-   
+       
         if disabled_tests:
             if test_name in disabled_tests:
-                self.system_manager.logging.debug("%s says - I'm disabled" %(test_name))
+                self.system_manager.logging.debug(f"{test_name} says - I'm disabled")
                 return (1, disabled_tests[test_name])
         return (0,None)
 

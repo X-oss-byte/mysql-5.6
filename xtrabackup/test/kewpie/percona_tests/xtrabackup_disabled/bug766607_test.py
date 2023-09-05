@@ -44,9 +44,10 @@ class basicTest(mysqlBaseTestCase):
                 shutil.rmtree(del_path)
 
     def load_table(self, table_name, row_count, server):
-        queries = []
-        for i in range(row_count):
-            queries.append("INSERT INTO %s VALUES (%d, %d)" %(table_name,i, row_count))
+        queries = [
+            "INSERT INTO %s VALUES (%d, %d)" % (table_name, i, row_count)
+            for i in range(row_count)
+        ]
         retcode, result = self.execute_queries(queries, server)
         self.assertEqual(retcode, 0, msg=result)
 

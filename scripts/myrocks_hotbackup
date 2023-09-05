@@ -30,10 +30,7 @@ exclude_files = ['master.info', 'relay-log.info', 'worker-relay-log.info',
 wdt_bin = 'wdt'
 
 def is_manifest(fname):
-  for m in rocksdb_files:
-    if fname.startswith(m):
-      return True
-  return False
+  return any(fname.startswith(m) for m in rocksdb_files)
 
 class Writer(object):
   a = None
@@ -50,14 +47,14 @@ class StreamWriter(Writer):
     elif stream_option == 'xbstream':
       self.stream_cmd= 'xbstream -c'
       if direct:
-        self.stream_cmd = self.stream_cmd + ' -d'
+        self.stream_cmd += ' -d'
     else:
       raise Exception("Only tar or xbstream is supported as streaming option.")
 
   def write(self, file_name):
-    rc= os.system(self.stream_cmd + " " + file_name)
+    rc = os.system(f"{self.stream_cmd} {file_name}")
     if (rc != 0):
-      raise Exception("Got error on stream write: " + str(rc) + " " + file_name)
+      raise Exception(f"Got error on stream write: {str(rc)} {file_name}")
 
 
 class MiscFilesProcessor():
@@ -114,30 +111,23 @@ class MiscFilesProcessor():
         self.process_file(f)
 
   def match(self, filename):
-    if self.regex.match(filename):
-      return True
-    else:
-      return False
+    return bool(self.regex.match(filename))
 
   def get_databases(self):
-    dbs = []
     dirs = [ d for d in os.listdir(self.datadir) \
-            if not os.path.isfile(os.path.join(self.datadir,d))]
-    for db in dirs:
-      if not db.startswith('.') and not self._is_socket(db):
-        dbs.append(db)
-    return dbs
+              if not os.path.isfile(os.path.join(self.datadir,d))]
+    return [
+        db for db in dirs if not db.startswith('.') and not self._is_socket(db)
+    ]
 
   def get_files(self, db):
-    dbdir = self.datadir + "/" + db
+    dbdir = f"{self.datadir}/{db}"
     return [ f for f in os.listdir(dbdir) \
-            if os.path.isfile(os.path.join(dbdir,f))]
+              if os.path.isfile(os.path.join(dbdir,f))]
 
   def _is_socket(self, item):
-      mode = os.stat(os.path.join(self.datadir, item)).st_mode
-      if stat.S_ISSOCK(mode):
-        return True
-      return False
+    mode = os.stat(os.path.join(self.datadir, item)).st_mode
+    return bool(stat.S_ISSOCK(mode))
 
 
 class MySQLBackup(MiscFilesProcessor):
@@ -289,10 +279,9 @@ class RocksDBBackup():
     return self
 
   def should_show_progress(self, size):
-    if int(self.total_sent_sst_size/self.show_progress_size_interval) > int((self.total_sent_sst_size-size)/self.show_progress_size_interval):
-      return True
-    else:
-      return False
+    return int(
+        self.total_sent_sst_size / self.show_progress_size_interval) > int(
+            (self.total_sent_sst_size - size) / self.show_progress_size_interval)
 
   def show_progress(self, size, seconds):
     logger.info("Backup Progress: %5.2f%%   Sent %6.2f GB of %6.2f GB data, Transfer Speed: %6.2f MB/s",
@@ -307,24 +296,15 @@ class RocksDBBackup():
                 len(self.total_sent_sst))
 
   def has_sent_all_sst(self):
-    if self.sent_sst_size == self.target_sst_size:
-      return True
-    return False
+    return self.sent_sst_size == self.target_sst_size
 
 
 class MySQLUtil:
   @staticmethod
   def connect(user, password, port, socket=None):
-    if socket:
-      dbh = MySQLdb.Connect(user=user,
-                            passwd=password,
-                            unix_socket=socket)
-    else:
-      dbh = MySQLdb.Connect(user=user,
-                            passwd=password,
-                            port=port,
-                            host="127.0.0.1")
-    return dbh
+    return (MySQLdb.Connect(user=user, passwd=password, unix_socket=socket)
+            if socket else MySQLdb.Connect(
+                user=user, passwd=password, port=port, host="127.0.0.1"))
 
   @staticmethod
   def create_checkpoint(dbh, checkpoint_dir):
@@ -373,7 +353,7 @@ class BackupRunner:
       if not opts.output_stream:
         raise Exception("Currently only streaming backup is supported.")
 
-      snapshot_dir = opts.checkpoint_directory + '/' + str(backup_round)
+      snapshot_dir = f'{opts.checkpoint_directory}/{str(backup_round)}'
       dbh = MySQLUtil.connect(opts.mysql_user,
                               opts.mysql_password,
                               opts.mysql_port,
@@ -656,9 +636,7 @@ def move_back():
         shutil.move(f, opts.rocksdb_datadir)
       else:
         shutil.move(f, opts.datadir)
-    else: #directory
-      if f.endswith('.rocksdb'):
-        continue
+    elif not f.endswith('.rocksdb'):
       shutil.move(f, opts.datadir)
 
 def start_backup():

@@ -1102,7 +1102,7 @@ class TestNonAsciiResults(TestCase):
             codecs.lookup(encoding)
         except LookupError:
             self.skip("Encoding unsupported by implementation: %r" % encoding)
-        f = codecs.open(os.path.join(self.dir, name + ".py"), "w", encoding)
+        f = codecs.open(os.path.join(self.dir, f"{name}.py"), "w", encoding)
         try:
             f.write(contents)
         finally:
@@ -1153,9 +1153,7 @@ class TestNonAsciiResults(TestCase):
             try:
                 b = u.encode(encoding)
                 if u == b.decode(encoding):
-                   if str_is_unicode:
-                       return u, u
-                   return u, b
+                    return (u, u) if str_is_unicode else (u, b)
             except (LookupError, UnicodeError):
                 pass
         self.skip("Could not find a sample text for encoding: %r" % encoding)
@@ -1166,14 +1164,15 @@ class TestNonAsciiResults(TestCase):
     def test_non_ascii_failure_string(self):
         """Assertion contents can be non-ascii and should get decoded"""
         text, raw = self._get_sample_text(_get_exception_encoding())
-        textoutput = self._test_external_case("self.fail(%s)" % _r(raw))
+        textoutput = self._test_external_case(f"self.fail({_r(raw)})")
         self.assertIn(self._as_output(text), textoutput)
 
     def test_non_ascii_failure_string_via_exec(self):
         """Assertion via exec can be non-ascii and still gets decoded"""
         text, raw = self._get_sample_text(_get_exception_encoding())
         textoutput = self._test_external_case(
-            testline='exec ("self.fail(%s)")' % _r(raw))
+            testline=f'exec ("self.fail({_r(raw)})")'
+        )
         self.assertIn(self._as_output(text), textoutput)
 
     def test_control_characters_in_failure_string(self):
@@ -1197,22 +1196,21 @@ class TestNonAsciiResults(TestCase):
         """A terminal raw backslash in an encoded string is weird but fine"""
         example_text = _u("\u5341")
         textoutput = self._test_external_case(
-            coding="shift_jis",
-            testline="self.fail('%s')" % example_text)
+            coding="shift_jis", testline=f"self.fail('{example_text}')"
+        )
         if str_is_unicode:
             output_text = example_text
         else:
             output_text = example_text.encode("shift_jis").decode(
                 _get_exception_encoding(), "replace")
-        self.assertIn(self._as_output("AssertionError: %s" % output_text),
-            textoutput)
+        self.assertIn(self._as_output(f"AssertionError: {output_text}"), textoutput)
 
     def test_file_comment_iso2022_jp(self):
         """Control character escapes must be preserved if valid encoding"""
         example_text, _ = self._get_sample_text("iso2022_jp")
         textoutput = self._test_external_case(
-            coding="iso2022_jp",
-            testline="self.fail('Simple') # %s" % example_text)
+            coding="iso2022_jp", testline=f"self.fail('Simple') # {example_text}"
+        )
         self.assertIn(self._as_output(example_text), textoutput)
 
     def test_unicode_exception(self):
@@ -1225,7 +1223,8 @@ class TestNonAsciiResults(TestCase):
             "        return self.args[0]\n")
         textoutput = self._test_external_case(
             modulelevel=exception_class,
-            testline="raise FancyError(%s)" % _r(example_text))
+            testline=f"raise FancyError({_r(example_text)})",
+        )
         self.assertIn(self._as_output(example_text), textoutput)
 
     def test_unprintable_exception(self):
@@ -1362,9 +1361,7 @@ class TestNonAsciiResultsWithUnittest(TestNonAsciiResults):
         return _Runner(stream).run(test)
 
     def _as_output(self, text):
-        if str_is_unicode:
-            return text
-        return text.encode("utf-8")
+        return text if str_is_unicode else text.encode("utf-8")
 
 
 def test_suite():

@@ -71,10 +71,7 @@ def innobackupex_prepare( innobackupex_path
         backup file
 
     """
-    cmd = "%s --apply-log --use-memory=%s --ibbackup=%s %s" %( innobackupex_path
-                                                             , use_mem
-                                                             , xtrabackup_path
-                                                             , backup_path)
+    cmd = f"{innobackupex_path} --apply-log --use-memory={use_mem} --ibbackup={xtrabackup_path} {backup_path}"
     if extra_opts:
         cmd = ' '.join([cmd, extra_opts])
     exec_path = os.path.dirname(innobackupex_path)
@@ -93,11 +90,7 @@ def innobackupex_restore( innobackupex_path
 
     """
 
-    cmd = "%s --defaults-file=%s --copy-back --ibbackup=%s %s" %( innobackupex_path
-                                                                , cnf_file
-                                                                , xtrabackup_path
-                                                                , backup_path
-                                                                )
+    cmd = f"{innobackupex_path} --defaults-file={cnf_file} --copy-back --ibbackup={xtrabackup_path} {backup_path}"
     if extra_opts:
         cmd = ' '.join([cmd, extra_opts])
     exec_path = os.path.dirname(innobackupex_path)

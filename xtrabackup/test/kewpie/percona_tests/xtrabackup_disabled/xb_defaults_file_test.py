@@ -44,35 +44,40 @@ class basicTest(mysqlBaseTestCase):
             shutil.rmtree(backup_path)
 
     def test_xb_defaults_file(self):
-            """ Ensure xtrabackup fails if --defaults-file is not the first 
+        """ Ensure xtrabackup fails if --defaults-file is not the first 
                 argument
        
             """
 
-            self.servers = servers
-            logging = test_executor.logging
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
-            table_name = "`test`"
+        self.servers = servers
+        logging = test_executor.logging
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
+        table_name = "`test`"
 
-            # populate our server with a test bed
-            test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
-            retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
-     
+        # populate our server with a test bed
+        test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
+        retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
+
             # take a backup
             # This should fail as we --defaults-file must be the first argument
-            cmd = [ xtrabackup
-                  , "--backup"
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--datadir=%s" %master_server.datadir
-                  , "--target-dir=%s" %backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertEqual(retcode,1,output)
-            expected_output = "xtrabackup: Error: --defaults-file must be specified first on the command line"
-            self.assertEqual(output.strip(), expected_output, msg = "%s || %s " %(expected_output, output.strip()))
+        cmd = [
+            xtrabackup,
+            "--backup",
+            f"--defaults-file={master_server.cnf_file}",
+            f"--datadir={master_server.datadir}",
+            f"--target-dir={backup_path}",
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertEqual(retcode,1,output)
+        expected_output = "xtrabackup: Error: --defaults-file must be specified first on the command line"
+        self.assertEqual(
+            output.strip(),
+            expected_output,
+            msg=f"{expected_output} || {output.strip()} ",
+        )

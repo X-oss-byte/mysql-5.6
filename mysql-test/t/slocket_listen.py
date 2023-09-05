@@ -9,10 +9,10 @@ from sys import argv, exit
 
 def main():
   if len(argv) < 2:
-    print('Usage: %s <socket name>' % argv[0])
+    print(f'Usage: {argv[0]} <socket name>')
     exit(1)
 
-  sn = relpath(argv[1] + 'slocket', getcwd())
+  sn = relpath(f'{argv[1]}slocket', getcwd())
 
   s = socket(AF_UNIX, SOCK_DGRAM)
 
@@ -23,7 +23,7 @@ def main():
 
   print('listening on %r' % sn)
 
-  while not exists(relpath(argv[1] + '/slocket_listen_kill_flag', getcwd())):
+  while not exists(relpath(f'{argv[1]}/slocket_listen_kill_flag', getcwd())):
     x,_,_ = select([s], [], [], 1.0)
     if len(x) > 0:
       x = x[0]

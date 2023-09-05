@@ -63,10 +63,7 @@ class BytesIO(object):
 
     def read(self, size=None):
         self._check_closed()
-        if size is None:
-            e = len(self._buf)
-        else:
-            e = min(self._point + size, len(self._buf))
+        e = len(self._buf) if size is None else min(self._point + size, len(self._buf))
         r = self._buf[self._point:e]
         self._point = e
         return r
@@ -91,8 +88,7 @@ class BytesIO(object):
         else:
             raise ValueError("whence must be 0, 1, or 2")
 
-        if self._point < 0:
-            self._point = 0  # XXX is this right?
+        self._point = max(self._point, 0)
 
     def tell(self):
         self._check_closed()
@@ -106,7 +102,6 @@ class BytesIO(object):
 
     def write(self, data):
         self._check_closed()
-        amt = len(data)
         size = len(self._buf)
         if self.mode == 'a':
             self._point = size
@@ -121,6 +116,7 @@ class BytesIO(object):
             self._point = len(self._buf)
         else:
             p = self._point
+            amt = len(data)
             self._buf[p:p + amt] = data
             self._point = min(p + amt, len(self._buf))
 

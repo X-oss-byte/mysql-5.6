@@ -45,57 +45,52 @@ class basicTest(mysqlBaseTestCase):
 
     def test_ib_nonempty_dir(self):
         self.servers = servers
-        logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
 
-            # take a backup
-            cmd = ("%s --defaults-file=%s --user=root --port=%d"
-                   " --host=127.0.0.1 --no-timestamp" 
-                   " --ibbackup=%s %s" %( innobackupex
-                                       , master_server.cnf_file
-                                       , master_server.master_port
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0,output)
-        
-            # shutdown our server
-            master_server.stop()
+        # take a backup
+        cmd = ("%s --defaults-file=%s --user=root --port=%d"
+               " --host=127.0.0.1 --no-timestamp" 
+               " --ibbackup=%s %s" %( innobackupex
+                                   , master_server.cnf_file
+                                   , master_server.master_port
+                                   , xtrabackup
+                                   , backup_path))
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0,output)
+
+        # shutdown our server
+        master_server.stop()
 
             # prepare our backup
-            cmd = ("%s --apply-log --no-timestamp --use-memory=500M "
-                   "--ibbackup=%s %s" %( innobackupex
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0,output)
+        cmd = f"{innobackupex} --apply-log --no-timestamp --use-memory=500M --ibbackup={xtrabackup} {backup_path}"
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0,output)
 
             # NOTE: We do NOT remove the old datadir
             # This should trigger an error message upon
             # attempting to restore
- 
+         
             # restore from backup
-            cmd = ("%s --defaults-file=%s --copy-back"
-                  " --ibbackup=%s %s" %( innobackupex
-                                       , master_server.cnf_file
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            logging.test_debug("Restored retcode: %d" %retcode)
-            self.assertEqual(retcode, 255, output)
+        cmd = f"{innobackupex} --defaults-file={master_server.cnf_file} --copy-back --ibbackup={xtrabackup} {backup_path}"
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        logging = test_executor.logging
+        logging.test_debug("Restored retcode: %d" %retcode)
+        self.assertEqual(retcode, 255, output)
             # Check our output for the expected error message
-            expected_msg = "Original data directory is not empty! at %s line" %(innobackupex)
-            last_line = output.strip().split('\n')[-1]
-            self.assertTrue(expected_msg in last_line, msg="Output: %s || expected message: %s" %(output, expected_msg))
-            # restart the server to clean up
-            master_server.start()
+        expected_msg = f"Original data directory is not empty! at {innobackupex} line"
+        last_line = output.strip().split('\n')[-1]
+        self.assertTrue(
+            expected_msg in last_line,
+            msg=f"Output: {output} || expected message: {expected_msg}",
+        )
+        # restart the server to clean up
+        master_server.start()
 
                     

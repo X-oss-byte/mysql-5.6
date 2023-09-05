@@ -57,7 +57,7 @@ testtools.runexample.TestFoo.test_quux
         # should get the one that exists and neither the one that doesn't nor
         # the unmentioned one that does.
         tempdir = self.useFixture(fixtures.TempDir())
-        tempname = tempdir.path + '/tests.list'
+        tempname = f'{tempdir.path}/tests.list'
         f = open(tempname, 'wb')
         try:
             f.write("""

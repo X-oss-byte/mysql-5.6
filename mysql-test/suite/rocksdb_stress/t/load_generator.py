@@ -118,17 +118,21 @@ def sha1(x):
 def is_connection_error(exc):
   error_code = exc.args[0]
   # PyMySQL CR codes has CR prefixes while MySQLdb doesn't
-  return (error_code == MySQLdb.constants.CR.CONNECTION_ERROR or
-          error_code == MySQLdb.constants.CR.CONN_HOST_ERROR or
-          error_code == MySQLdb.constants.CR.SERVER_LOST or
-          error_code == MySQLdb.constants.CR.SERVER_GONE_ERROR or
-          error_code == MySQLdb.constants.ER.QUERY_INTERRUPTED or
-          error_code == MySQLdb.constants.ER.SERVER_SHUTDOWN)
+  return error_code in [
+      MySQLdb.constants.CR.CONNECTION_ERROR,
+      MySQLdb.constants.CR.CONN_HOST_ERROR,
+      MySQLdb.constants.CR.SERVER_LOST,
+      MySQLdb.constants.CR.SERVER_GONE_ERROR,
+      MySQLdb.constants.ER.QUERY_INTERRUPTED,
+      MySQLdb.constants.ER.SERVER_SHUTDOWN,
+  ]
 
 def is_deadlock_error(exc):
   error_code = exc.args[0]
-  return (error_code == MySQLdb.constants.ER.LOCK_DEADLOCK or
-          error_code == MySQLdb.constants.ER.LOCK_WAIT_TIMEOUT)
+  return error_code in [
+      MySQLdb.constants.ER.LOCK_DEADLOCK,
+      MySQLdb.constants.ER.LOCK_WAIT_TIMEOUT,
+  ]
 
 # should be deterministic given an idx
 def gen_msg(idx, thread_id, request_id):
@@ -138,7 +142,7 @@ def gen_msg(idx, thread_id, request_id):
 
   if roll_d100(50):
     # blob that cannot be compressed (well, compresses to 85% of original size)
-    msg = ''.join([random.choice(CHARS) for x in range(blob_length)])
+    msg = ''.join([random.choice(CHARS) for _ in range(blob_length)])
   else:
     # blob that can be compressed
     msg = random.choice(CHARS) * blob_length
@@ -148,7 +152,7 @@ def gen_msg(idx, thread_id, request_id):
 
 def execute(cur, stmt):
   ROW_COUNT_ERROR = 18446744073709551615
-  logging.debug("Executing %s" % stmt)
+  logging.debug(f"Executing {stmt}")
   cur.execute(stmt)
   if cur.rowcount < 0 or cur.rowcount == ROW_COUNT_ERROR:
     # PyMySQL CR codes has CR prefixes while MySQLdb doesn't
@@ -240,7 +244,7 @@ class WorkerThread(threading.Thread):
 
   def set_isolation_level(self, isolation_level, persist = False):
     if isolation_level is not None:
-      execute(self.cur, "SET @@SESSION.tx_isolation = '%s'" % isolation_level)
+      execute(self.cur, f"SET @@SESSION.tx_isolation = '{isolation_level}'")
       if self.cur.rowcount != 0:
         raise TestError("Unable to set the isolation level to %s")
 
@@ -410,10 +414,7 @@ class LoadGenWorker(WorkerThread):
     self.start()
 
   def finish(self):
-    if self.total_time:
-      req_per_sec = self.loop_num / self.total_time
-    else:
-      req_per_sec = -1
+    req_per_sec = self.loop_num / self.total_time if self.total_time else -1
     logging.info("total txns: %d, txn/s: %.2f rps" %
                  (self.loop_num, req_per_sec))
 
@@ -442,7 +443,7 @@ class LoadGenWorker(WorkerThread):
 
     self.cur_txn = {idx:request_id}
     self.cur_txn_state = self.TXN_COMMITTED
-    for i in range(OPTIONS.committed_txns):
+    for _ in range(OPTIONS.committed_txns):
       self.prev_txn.append(self.cur_txn)
 
     # fetch the rest of the row for the id space owned by this thread
@@ -486,7 +487,7 @@ class LoadGenWorker(WorkerThread):
             (self.table, ','.join(str(x) for x in txn), cond, request_id))
     execute(self.cur, stmt)
     if (self.cur.rowcount != 1):
-      raise TestError("Unable to retrieve results for query '%s'" % stmt)
+      raise TestError(f"Unable to retrieve results for query '{stmt}'")
     count = self.cur.fetchone()[0]
     if (count > 0):
       raise TestError("Expected '%s' to return 0 rows, but %d returned "
@@ -494,11 +495,11 @@ class LoadGenWorker(WorkerThread):
     self.con.commit()
 
   def verify_data(self):
-    # if the state of the current transaction is unknown (i.e. a commit was
-    # issued, but the connection failed before, check the start_id row to
-    # determine if it was committed
-    request_id = self.cur_txn[self.start_id]
     if self.cur_txn_state == self.TXN_COMMIT_STARTED:
+      # if the state of the current transaction is unknown (i.e. a commit was
+      # issued, but the connection failed before, check the start_id row to
+      # determine if it was committed
+      request_id = self.cur_txn[self.start_id]
       assert request_id >= 0
       idx = self.start_id
       stmt = "SELECT id, request_id FROM %s where id = %d" % (self.table, idx)
@@ -605,8 +606,6 @@ class LoadGenWorker(WorkerThread):
 
     # perform a read of these rows
     ID_COL = 0
-    ZERO_SUM_COL = ID_COL + 1
-
     # For repeatable-read isolation levels on MyRocks, during the lock
     # acquisition part of this transaction, it is possible the selected rows
     # conflict with another thread's transaction. This results in a deadlock
@@ -615,6 +614,7 @@ class LoadGenWorker(WorkerThread):
     # the row. MyRocks will prevent any updates to this row until the
     # snapshot is released and re-acquired.
     NUM_RETRIES = 100
+    ZERO_SUM_COL = ID_COL + 1
     for i in range(NUM_RETRIES):
       ids_found = {}
       try:
@@ -639,8 +639,9 @@ class LoadGenWorker(WorkerThread):
       time.sleep(0.2)
 
     if i == NUM_RETRIES - 1:
-      raise TestError("Unable to acquire locks after a number of retries "
-                      "for query '%s'" % stmt)
+      raise TestError(
+          f"Unable to acquire locks after a number of retries for query '{stmt}'"
+      )
 
     # ensure that the zero_sum column remains summed up to zero at the
     # end of this operation
@@ -667,22 +668,17 @@ class LoadGenWorker(WorkerThread):
           stmt = gen_update(self.table, idx, self.thread_id, request_id,
                             zero_sum)
           current_sum += zero_sum
-      else:
-        # if it does not exist, then determine if an insert should happen
-        if action <= 1:
-          stmt = gen_insert(self.table, idx, self.thread_id, request_id,
-                            zero_sum)
-          current_sum += zero_sum
+      elif action <= 1:
+        stmt = gen_insert(self.table, idx, self.thread_id, request_id,
+                          zero_sum)
+        current_sum += zero_sum
 
       if stmt is not None:
         # mark in self.cur_txn what these new changes will be
-        if is_delete:
-          self.cur_txn[idx] = -request_id
-        else:
-          self.cur_txn[idx] = request_id
+        self.cur_txn[idx] = -request_id if is_delete else request_id
         execute(self.cur, stmt)
         if self.cur.rowcount == 0:
-          raise TestError("Executing %s returned row count of 0!" % stmt)
+          raise TestError(f"Executing {stmt} returned row count of 0!")
 
     # the start_id row is used to determine if this transaction has been
     # committed if the connect fails and it is used to adjust the zero_sum
@@ -694,12 +690,12 @@ class LoadGenWorker(WorkerThread):
                              -current_sum)
     execute(self.cur, stmt)
     if self.cur.rowcount == 0:
-      raise TestError("Executing '%s' returned row count of 0!" % stmt)
+      raise TestError(f"Executing '{stmt}' returned row count of 0!")
 
     # 90% commit, 10% rollback
     if roll_d100(90):
       self.con.rollback()
-      logging.debug("request %s was rolled back" % request_id)
+      logging.debug(f"request {request_id} was rolled back")
     else:
       self.cur_txn_state = self.TXN_COMMIT_STARTED
       self.con.commit()
@@ -766,13 +762,13 @@ class CheckerWorker(WorkerThread):
     #   1. request the server to do it (90% of the time for now)
     #   2. read all rows and calculate directly
     if roll_d100(90):
-      stmt = "SELECT SUM(zero_sum) FROM %s" % self.table
+      stmt = f"SELECT SUM(zero_sum) FROM {self.table}"
       if roll_d100(50):
         stmt += " FORCE INDEX(msg_i)"
       execute(self.cur, stmt)
 
       if self.cur.rowcount != 1:
-        raise ValidateError("Error with query '%s'" % stmt)
+        raise ValidateError(f"Error with query '{stmt}'")
       res = self.cur.fetchone()[0]
       if res != 0:
         raise ValidateError("Expected zero_sum to be 0, but %d returned "
@@ -793,7 +789,7 @@ class CheckerWorker(WorkerThread):
         if self.cur.rowcount == 0:
           break
 
-        for i in range(self.cur.rowcount - 1):
+        for _ in range(self.cur.rowcount - 1):
           sum += self.cur.fetchone()[ZERO_SUM_COL]
 
         last_row = self.cur.fetchone()
@@ -806,6 +802,7 @@ class CheckerWorker(WorkerThread):
       self.set_isolation_level(cur_isolation_level)
 
   def check_rows(self):
+
     class id_range():
       def __init__(self, min_id, min_inclusive, max_id, max_inclusive):
         self.min_id = min_id if min_inclusive else min_id + 1
@@ -813,17 +810,17 @@ class CheckerWorker(WorkerThread):
       def count(self, idx):
         return idx >= self.min_id and idx <= self.max_id
 
-    stmt = ("SELECT id, msg, msg_length, msg_checksum FROM %s WHERE " %
-            self.table)
+    stmt = f"SELECT id, msg, msg_length, msg_checksum FROM {self.table} WHERE "
 
     # two methods for checking rows
     #  1. pick a number of rows at random
     #  2. range scan
     if roll_d100(90):
-      ids = []
-      for i in range(random.randint(1, MAX_ROWS_PER_REQ)):
-        ids.append(random.randint(0, self.max_id - 1))
-      stmt += "id in (%s)" % ','.join(str(x) for x in ids)
+      ids = [
+          random.randint(0, self.max_id - 1)
+          for _ in range(random.randint(1, MAX_ROWS_PER_REQ))
+      ]
+      stmt += f"id in ({','.join(str(x) for x in ids)})"
     else:
       id1 = random.randint(0, self.max_id - 1)
       id2 = random.randint(0, self.max_id - 1)
@@ -887,7 +884,7 @@ class CheckerWorker(WorkerThread):
         if self.reconnect():
           raise Exception("Unable to reconnect to MySQL server")
 
-if  __name__ == '__main__':
+if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Concurrent load generator.')
 
   parser.add_argument('-C, --committed-txns', dest='committed_txns',
@@ -953,18 +950,14 @@ if  __name__ == '__main__':
 
   OPTIONS = parser.parse_args()
 
-  if OPTIONS.verbose:
-    log_level = logging.DEBUG
-  else:
-    log_level = logging.INFO
-
+  log_level = logging.DEBUG if OPTIONS.verbose else logging.INFO
   logging.basicConfig(level=log_level,
                       format='%(asctime)s %(threadName)s [%(levelname)s] '
                              '%(message)s',
                       datefmt='%Y-%m-%d %H:%M:%S',
                       filename=OPTIONS.log_file)
 
-  logging.info("Command line given: %s" % ' '.join(sys.argv))
+  logging.info(f"Command line given: {' '.join(sys.argv)}")
 
   if (OPTIONS.max_id < 0 or OPTIONS.ids_per_loader <= 0 or
       OPTIONS.max_id < OPTIONS.ids_per_loader * OPTIONS.num_loaders):
@@ -972,7 +965,7 @@ if  __name__ == '__main__':
                   "larger than ids_per_loader * num_loaders")
     exit(1)
 
-  logging.info("Using table %s.%s for test" % (OPTIONS.db, OPTIONS.table))
+  logging.info(f"Using table {OPTIONS.db}.{OPTIONS.table} for test")
 
   if OPTIONS.truncate:
     logging.info("Truncating table")
@@ -982,30 +975,23 @@ if  __name__ == '__main__':
       raise TestError("Unable to connect to mysqld server to create/truncate "
                       "table")
     cur = con.cursor()
-    cur.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.tables WHERE "
-                         "table_schema = '%s' AND table_name = '%s'" %
-                         (OPTIONS.db, OPTIONS.table))
+    cur.execute(
+        f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.tables WHERE table_schema = '{OPTIONS.db}' AND table_name = '{OPTIONS.table}'"
+    )
     if cur.rowcount != 1:
-      logging.error("Unable to retrieve information about table %s "
-                    "from information_schema!" % OPTIONS.table)
+      logging.error(
+          f"Unable to retrieve information about table {OPTIONS.table} from information_schema!"
+      )
       exit(1)
 
     if cur.fetchone()[0] == 0:
-      logging.info("Table %s not found, creating a new one" % OPTIONS.table)
-      cur.execute("CREATE TABLE %s (id INT PRIMARY KEY, "
-                  "thread_id INT NOT NULL, "
-                  "request_id BIGINT UNSIGNED NOT NULL, "
-                  "update_count INT UNSIGNED NOT NULL DEFAULT 0, "
-                  "zero_sum INT DEFAULT 0, "
-                  "msg VARCHAR(1024), "
-                  "msg_length int, "
-                  "msg_checksum varchar(128), "
-                  "KEY msg_i(msg(255), zero_sum)) "
-                  "ENGINE=RocksDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin" %
-                  OPTIONS.table)
+      logging.info(f"Table {OPTIONS.table} not found, creating a new one")
+      cur.execute(
+          f"CREATE TABLE {OPTIONS.table} (id INT PRIMARY KEY, thread_id INT NOT NULL, request_id BIGINT UNSIGNED NOT NULL, update_count INT UNSIGNED NOT NULL DEFAULT 0, zero_sum INT DEFAULT 0, msg VARCHAR(1024), msg_length int, msg_checksum varchar(128), KEY msg_i(msg(255), zero_sum)) ENGINE=RocksDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin"
+      )
     else:
-      logging.info("Table %s found, truncating" % OPTIONS.table)
-      cur.execute("TRUNCATE TABLE %s" % OPTIONS.table)
+      logging.info(f"Table {OPTIONS.table} found, truncating")
+      cur.execute(f"TRUNCATE TABLE {OPTIONS.table}")
     con.commit()
 
   if populate_table(OPTIONS.num_records):
@@ -1013,15 +999,9 @@ if  __name__ == '__main__':
     exit(1)
 
   logging.info("Starting %d loaders" % OPTIONS.num_loaders)
-  loaders = []
-  for i in range(OPTIONS.num_loaders):
-    loaders.append(LoadGenWorker(i))
-
+  loaders = [LoadGenWorker(i) for i in range(OPTIONS.num_loaders)]
   logging.info("Starting %d checkers" % OPTIONS.num_checkers)
-  checkers = []
-  for i in range(OPTIONS.num_checkers):
-    checkers.append(CheckerWorker(i))
-
+  checkers = [CheckerWorker(i) for i in range(OPTIONS.num_checkers)]
   while LOADERS_READY < OPTIONS.num_loaders:
     time.sleep(0.5)
 

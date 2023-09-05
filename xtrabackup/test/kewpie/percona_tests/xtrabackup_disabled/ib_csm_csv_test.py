@@ -44,77 +44,72 @@ class basicTest(mysqlBaseTestCase):
 
     def test_ib_csm_csv(self):
         self.servers = servers
-        logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
 
-            # populate our server with a test bed
-            queries = ["CREATE TABLE csm (a INT NOT NULL ) ENGINE=CSV"
-                      ]
-            row_count = 100
-            for i in range(row_count):
-                queries.append("INSERT INTO csm VALUES (%d)" %i)
-            retcode, result = self.execute_queries(queries, master_server)
-            self.assertEqual(retcode, 0, msg=result)
- 
-            # Get a checksum for our table
-            query = "CHECKSUM TABLE csm"
-            retcode, orig_checksum = self.execute_query(query, master_server)
-            self.assertEqual(retcode, 0, msg=result)
-            logging.test_debug("Original checksum: %s" %orig_checksum)
-        
-            # take a backup
-            cmd = ("%s --defaults-file=%s --user=root --port=%d"
-                   " --host=127.0.0.1 --no-timestamp" 
-                   " --ibbackup=%s %s" %( innobackupex
-                                       , master_server.cnf_file
-                                       , master_server.master_port
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0,output)
-        
-            # shutdown our server
-            master_server.stop()
+        # populate our server with a test bed
+        queries = ["CREATE TABLE csm (a INT NOT NULL ) ENGINE=CSV"
+                  ]
+        row_count = 100
+        queries.extend("INSERT INTO csm VALUES (%d)" %i for i in range(row_count))
+        retcode, result = self.execute_queries(queries, master_server)
+        self.assertEqual(retcode, 0, msg=result)
+
+        # Get a checksum for our table
+        query = "CHECKSUM TABLE csm"
+        retcode, orig_checksum = self.execute_query(query, master_server)
+        self.assertEqual(retcode, 0, msg=result)
+        logging = test_executor.logging
+        logging.test_debug(f"Original checksum: {orig_checksum}")
+
+        # take a backup
+        cmd = ("%s --defaults-file=%s --user=root --port=%d"
+               " --host=127.0.0.1 --no-timestamp" 
+               " --ibbackup=%s %s" %( innobackupex
+                                   , master_server.cnf_file
+                                   , master_server.master_port
+                                   , xtrabackup
+                                   , backup_path))
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0,output)
+
+        # shutdown our server
+        master_server.stop()
 
             # prepare our backup
-            cmd = ("%s --apply-log --no-timestamp --use-memory=500M "
-                   "--ibbackup=%s %s" %( innobackupex
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0,output)
+        cmd = f"{innobackupex} --apply-log --no-timestamp --use-memory=500M --ibbackup={xtrabackup} {backup_path}"
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0,output)
 
-            # remove old datadir
-            shutil.rmtree(master_server.datadir)
-            os.mkdir(master_server.datadir)
-        
+        # remove old datadir
+        shutil.rmtree(master_server.datadir)
+        os.mkdir(master_server.datadir)
+
             # restore from backup
-            cmd = ("%s --defaults-file=%s --copy-back"
-                  " --ibbackup=%s %s" %( innobackupex
-                                       , master_server.cnf_file
-                                       , xtrabackup
-                                       , backup_path))
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0, output)
+        cmd = f"{innobackupex} --defaults-file={master_server.cnf_file} --copy-back --ibbackup={xtrabackup} {backup_path}"
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0, output)
 
-            # restart server (and ensure it doesn't crash)
-            master_server.start()
-            self.assertTrue(master_server.status==1, 'Server failed restart from restored datadir...')
+        # restart server (and ensure it doesn't crash)
+        master_server.start()
+        self.assertTrue(master_server.status==1, 'Server failed restart from restored datadir...')
 
-            # Get a checksum for our table
-            query = "CHECKSUM TABLE csm"
-            retcode, restored_checksum = self.execute_query(query, master_server)
-            self.assertEqual(retcode, 0, msg=result)
-            logging.test_debug("Restored checksum: %s" %restored_checksum)
+        # Get a checksum for our table
+        query = "CHECKSUM TABLE csm"
+        retcode, restored_checksum = self.execute_query(query, master_server)
+        self.assertEqual(retcode, 0, msg=result)
+        logging.test_debug(f"Restored checksum: {restored_checksum}")
 
-            self.assertEqual(orig_checksum, restored_checksum, msg = "Orig: %s | Restored: %s" %(orig_checksum, restored_checksum))
+        self.assertEqual(
+            orig_checksum,
+            restored_checksum,
+            msg=f"Orig: {orig_checksum} | Restored: {restored_checksum}",
+        )
  
 

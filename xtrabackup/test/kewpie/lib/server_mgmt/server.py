@@ -76,10 +76,7 @@ class Server(object):
         self.type = self.code_tree.type
         self.valgrind = self.system_manager.valgrind
         self.gdb = self.system_manager.gdb
-        if self.valgrind:
-            self.valgrind_time_buffer = 10
-        else:
-            self.valgrind_time_buffer = 1
+        self.valgrind_time_buffer = 10 if self.valgrind else 1
         self.cmd_prefix = self.system_manager.cmd_prefix
         self.logging = self.system_manager.logging
         self.no_secure_file_priv = self.server_manager.no_secure_file_priv
@@ -104,7 +101,7 @@ class Server(object):
                     ]
         for database in databases:
             db_path = os.path.join(self.datadir,'local',database,'db.opt')
-            cmd = "%s %s %s" %(self.schemawriter, database, db_path)
+            cmd = f"{self.schemawriter} {database} {db_path}"
             self.system_manager.execute_cmd(cmd)
 
     def process_server_options(self):
@@ -129,7 +126,7 @@ class Server(object):
         """ Restore from a stored snapshot """
         
         if not os.path.exists(self.snapshot_path):
-            self.logging.error("Could not find snapshot: %s" %(self.snapshot_path))
+            self.logging.error(f"Could not find snapshot: {self.snapshot_path}")
         self.system_manager.remove_dir(self.datadir)
         self.system_manager.copy_dir(self.snapshot_path, self.datadir)
         
@@ -208,10 +205,10 @@ class Server(object):
         # take care of any environment updates we need to do
         self.server_manager.handle_environment_reqs(self, working_environ)
 
-        self.logging.verbose("Starting server: %s.%s" %(self.owner, self.name))
+        self.logging.verbose(f"Starting server: {self.owner}.{self.name}")
         start_cmd = self.get_start_cmd()
         self.logging.debug("Starting server with:")
-        self.logging.debug("%s" %(start_cmd))
+        self.logging.debug(f"{start_cmd}")
         # we signal we tried to start as an attempt
         # to catch the case where a server is just 
         # starting up and the user ctrl-c's
@@ -243,12 +240,12 @@ class Server(object):
                                                  , stderr=None
                                                  , close_fds=True
                                                  )
-        
+
                 server_retcode = 0
         else:
             # manual-gdb issue
             server_retcode = 0
-        
+
         timer = float(0)
         timeout = float(self.server_start_timeout)
 
@@ -259,12 +256,12 @@ class Server(object):
             # If manual-gdb, this == None and we want to give the 
             # user all the time they need
             if start_cmd:
-                timer= timer + self.timer_increment
-            
+                timer += self.timer_increment
+
         if timer == timeout and not self.ping(quiet=True):
             self.logging.error(( "Server failed to start within %d seconds.  This could be a problem with the test machine or the server itself" %(timeout)))
             server_retcode = 1
-     
+
         if server_retcode == 0:
             self.status = 1 # we are running
             if os.path.exists(self.pid_file):
@@ -276,15 +273,17 @@ class Server(object):
         if server_retcode != 0 and not expect_fail:
             self.logging.error("Server startup command: %s failed with error code %d" %( start_cmd
                                                                                   , server_retcode))
-            self.logging.error("Dumping error log: %s" %(self.error_log))
+            self.logging.error(f"Dumping error log: {self.error_log}")
             with open(self.error_log,'r') as errlog:
                 for line in errlog:
                     self.logging.error(line.strip())
         elif server_retcode == 0 and expect_fail:
         # catch a startup that should have failed and report
-            self.logging.error("Server startup command :%s expected to fail, but succeeded" %(start_cmd))
+            self.logging.error(
+                f"Server startup command :{start_cmd} expected to fail, but succeeded"
+            )
 
-        self.tried_start = 0 
+        self.tried_start = 0
         if self.need_to_set_master:
             # TODO handle a bad slave retcode
             slave_retcode = self.set_master(self.master)
@@ -311,10 +310,10 @@ class Server(object):
             attempts_remain = 10
             while not self.ping(quiet=True) and attempts_remain:
                 time.sleep(1)
-                attempts_remain = attempts_remain - 1
+                attempts_remain -= 1
         # Now we try to shut the server down
         if self.ping(quiet=True):
-            self.logging.verbose("Stopping server %s.%s" %(self.owner, self.name))
+            self.logging.verbose(f"Stopping server {self.owner}.{self.name}")
             stop_cmd = self.get_stop_cmd()
             self.logging.debug("with shutdown command:\n %s" %(stop_cmd))
             #retcode, output = self.system_manager.execute_cmd(stop_cmd)
@@ -329,20 +328,15 @@ class Server(object):
             attempts_remain = 100
             while self.system_manager.find_pid(self.pid) and attempts_remain:
                 time.sleep(1)
-                attempts_remain = attempts_remain - 1
+                attempts_remain -= 1
                 if not attempts_remain: # we kill the pid
                     if self.verbose:
-                        self.logging.warning("Forcing kill of server pid: %s" %(server.pid))
+                        self.logging.warning(f"Forcing kill of server pid: {server.pid}")
                     self.system_manager.kill_pid(self.pid)
             if shutdown_retcode:
                 self.logging.error("Problem shutting down server:")
-                self.logging.error("%s" %(shutdown_retcode))
-                self.status = 0
-            else:
-                self.status = 0 # indicate we are shutdown
-        else:
-            # make sure the server is indicated as stopped
-            self.status = 0
+                self.logging.error(f"{shutdown_retcode}")
+        self.status = 0
 
     def die(self):
         """ This causes us to kill the server pid """

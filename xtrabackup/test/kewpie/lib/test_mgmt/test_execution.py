@@ -83,10 +83,10 @@ class testExecutor():
         """ Execute a test case.  The details are *very* mode specific """
         self.status = 1 # we are running
         keep_running = 1
-        self.logging.verbose("Executor: %s beginning test execution..." %(self.name))
+        self.logging.verbose(f"Executor: {self.name} beginning test execution...")
         while self.test_manager.has_tests() and keep_running == 1:
             self.get_testCase()
-            for i in range(self.testcase_repeat_count):
+            for _ in range(self.testcase_repeat_count):
                 if keep_running:
                     if self.current_testcase.should_run():
                         self.handle_system_reqs()
@@ -101,13 +101,15 @@ class testExecutor():
                         self.current_test_output = self.current_testcase.skip_reason
                     # Warn the user if the test suddenly starts passing
                     if self.current_testcase.expect_fail and self.current_test_status != fail:
-                        self.logging.warning("Test: %s was expected to fail but has passed!" %self.current_testcase.fullname)
+                        self.logging.warning(
+                            f"Test: {self.current_testcase.fullname} was expected to fail but has passed!"
+                        )
                     self.record_test_result()
                     if self.current_test_status == 'fail' and not self.execution_manager.force and not self.current_testcase.expect_fail:
                         self.logging.error("Failed test.  Use --force to execute beyond the first test failure")
                         keep_running = 0
                     self.current_test_status = None # reset ourselves
-                    
+
         self.status = 0
 
     def get_testCase(self):
@@ -126,38 +128,38 @@ class testExecutor():
  
         """
 
-        server_requirements = self.current_testcase.server_requirements
-        if server_requirements:
-            (self.current_servers,bad_start) = self.server_manager.request_servers( self.name
-                                                                  , self.workdir
-                                                                  , self.current_testcase.cnf_path
-                                                                  , self.current_testcase.server_requests
-                                                                  , server_requirements
-                                                                  , self)
-            if self.current_servers == 0 or bad_start:
-                # error allocating servers, test is a failure
-                self.logging.warning("Problem starting server(s) for test...failing test case")
-                self.current_test_status = 'fail'
-                self.set_server_status(self.current_test_status)
-                output = ''           
-            if self.initial_run:
-                self.initial_run = 0
-                self.current_servers[0].report()
-            self.master_server = self.current_servers[0]
-            if len(self.current_servers) > 1:
-                # We have a validation server or something we need to communicate with
-                # We export some env vars with EXECUTOR_SERVER and expect the randge
-                # code to know enough to look for this marker
-                extra_reqs = {}
-                for server in self.current_servers:
-                    variable_name = "%s_%s" %(self.name.upper(), server.name.upper())
-                    variable_value = str(server.master_port)
-                    extra_reqs[variable_name] = variable_value
-                    variable_name = variable_name + "_PID"
-                    variable_value = str(server.pid)
-                    extra_reqs[variable_name] = variable_value
-                self.working_environment.update(extra_reqs)
-            return 
+        if not (server_requirements := self.current_testcase.server_requirements):
+            return
+        (self.current_servers,bad_start) = self.server_manager.request_servers( self.name
+                                                              , self.workdir
+                                                              , self.current_testcase.cnf_path
+                                                              , self.current_testcase.server_requests
+                                                              , server_requirements
+                                                              , self)
+        if self.current_servers == 0 or bad_start:
+            # error allocating servers, test is a failure
+            self.logging.warning("Problem starting server(s) for test...failing test case")
+            self.current_test_status = 'fail'
+            self.set_server_status(self.current_test_status)
+            output = ''
+        if self.initial_run:
+            self.initial_run = 0
+            self.current_servers[0].report()
+        self.master_server = self.current_servers[0]
+        if len(self.current_servers) > 1:
+            # We have a validation server or something we need to communicate with
+            # We export some env vars with EXECUTOR_SERVER and expect the randge
+            # code to know enough to look for this marker
+            extra_reqs = {}
+            for server in self.current_servers:
+                variable_name = f"{self.name.upper()}_{server.name.upper()}"
+                variable_value = str(server.master_port)
+                extra_reqs[variable_name] = variable_value
+                variable_name = f"{variable_name}_PID"
+                variable_value = str(server.pid)
+                extra_reqs[variable_name] = variable_value
+            self.working_environment.update(extra_reqs)
+        return 
 
     def handle_start_and_exit(self, start_and_exit):
         """ Do what needs to be done if we have the
@@ -193,9 +195,9 @@ class testExecutor():
         if self.execution_manager.gendata_file:
             dsn = "--dsn=dbi:%s:host=127.0.0.1:port=%d:user=root:password="":database=test" %( self.master_server.type
                                                                                              , self.master_server.master_port)
-            gendata_cmd = "./gendata.pl %s --spec=%s" %( dsn 
-                                                       , self.execution_manager.gendata_file
-                                                       )
+            gendata_cmd = (
+                f"./gendata.pl {dsn} --spec={self.execution_manager.gendata_file}"
+            )
             #self.system_manager.execute_cmd(gendata_cmd)
             gendata_subproc = subprocess.Popen( gendata_cmd
                                               , shell=True
@@ -204,14 +206,15 @@ class testExecutor():
                                               , stderr = None
                                               )
             gendata_subproc.wait()
-            gendata_retcode = gendata_subproc.returncode
-            if gendata_retcode:
+            if gendata_retcode := gendata_subproc.returncode:
                 self.logging.error("gendata command: %s failed with retcode: %d" %(gendata_cmd
                                                                              , gendata_retcode))
 
     def execute_testCase(self):
         """ Do whatever evil voodoo we must do to execute a testCase """
-        self.logging.verbose("Executor: %s executing test: %s" %(self.name, self.current_testcase.fullname))
+        self.logging.verbose(
+            f"Executor: {self.name} executing test: {self.current_testcase.fullname}"
+        )
 
     def record_test_result(self):
         """ We get the test_manager to record the result """
@@ -245,7 +248,9 @@ class testExecutor():
     def process_master_sh(self):
         """ We do what we need to if we have a master.sh file """
         if self.current_testcase.master_sh:
-            retcode, output = self.system_manager.execute_cmd("/bin/sh %s" %(self.current_testcase.master_sh))
+            retcode, output = self.system_manager.execute_cmd(
+                f"/bin/sh {self.current_testcase.master_sh}"
+            )
             self.logging.debug("retcode: %retcode")
             self.logging.debug("%output")
 
@@ -289,26 +294,29 @@ class testExecutor():
                                                        , 'sql-bench')
                        }
         elif self.master_server.type in ['mysql','percona','galera']:
-            env_reqs = {  'MYSQLTEST_VARDIR': self.master_server.vardir
-                       ,  'MYSQL_TMP_DIR': self.master_server.tmpdir
-                       ,  'MASTER_MYSOCK': self.master_server.socket_file
-                       ,  'MASTER_MYPORT': str(self.master_server.master_port)
-                       ,  'EXE_MYSQL': self.master_server.mysql_client
-                       ,  'MYSQL_DUMP': "%s --no-defaults -uroot -p%d" %( self.master_server.mysqldump
-                                                            , self.master_server.master_port)
-                       ,  'MYSQL_SLAP': "%s -uroot -p%d" %( self.master_server.mysqlslap
-                                                          , self.master_server.master_port)
-                       ,  'MYSQL_IMPORT': "%s -uroot -p%d" %( self.master_server.mysqlimport
-                                                            , self.master_server.master_port)
-                       ,  'MYSQL_UPGRADE': "%s -uroot --datadir=%s" %( self.master_server.mysql_upgrade
-                                                                     , self.master_server.datadir)
-                       ,  'MYSQL': "%s -uroot -p%d" %( self.master_server.mysql_client
-                                                     , self.master_server.master_port)
-                       #,  'MYSQL_BASEDIR' : self.system_manager.code_manager.code_trees['mysql'][0].basedir
-                       ,  'MYSQL_TEST_WORKDIR' : self.system_manager.workdir
-                       ,  'SQLBENCH_DIR' : os.path.join( self.system_manager.testdir
-                                                       , 'sql-bench')
-                       }         
+            env_reqs = {
+                'MYSQLTEST_VARDIR': self.master_server.vardir,
+                'MYSQL_TMP_DIR': self.master_server.tmpdir,
+                'MASTER_MYSOCK': self.master_server.socket_file,
+                'MASTER_MYPORT': str(self.master_server.master_port),
+                'EXE_MYSQL': self.master_server.mysql_client,
+                'MYSQL_DUMP': "%s --no-defaults -uroot -p%d"
+                % (self.master_server.mysqldump, self.master_server.master_port),
+                'MYSQL_SLAP': "%s -uroot -p%d"
+                % (self.master_server.mysqlslap, self.master_server.master_port),
+                'MYSQL_IMPORT': "%s -uroot -p%d"
+                % (self.master_server.mysqlimport, self.master_server.master_port),
+                'MYSQL_UPGRADE': f"{self.master_server.mysql_upgrade} -uroot --datadir={self.master_server.datadir}",
+                'MYSQL': "%s -uroot -p%d"
+                % (
+                    self.master_server.mysql_client,
+                    self.master_server.master_port,
+                ),
+                'MYSQL_TEST_WORKDIR': self.system_manager.workdir,
+                'SQLBENCH_DIR': os.path.join(
+                    self.system_manager.testdir, 'sql-bench'
+                ),
+            }         
 
         self.working_environment = self.system_manager.env_manager.create_working_environment(env_reqs)
 

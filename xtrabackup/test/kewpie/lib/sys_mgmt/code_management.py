@@ -74,7 +74,7 @@ class codeManager:
 
         """
 
-        self.logging.verbose("Processing code rooted at basedir: %s..." %(basedir))
+        self.logging.verbose(f"Processing code rooted at basedir: {basedir}...")
         # We comment out / remove the old get_code_type method
         # as the expectation is that the type will be passed as part of the 
         # basedir string / will be the default type (which will be configurable)
@@ -104,7 +104,7 @@ class codeManager:
             test_tree = perconaTree(basedir,variables,self.system_manager)
             return code_type, test_tree
         else:
-            self.logging.error("Tree_type: %s not supported yet" %(tree_type))
+            self.logging.error(f"Tree_type: {tree_type} not supported yet")
             sys.exit(1)        
 
     def get_tree(self, server_type, server_version):

@@ -82,10 +82,7 @@ if sys.version_info > (2, 5):
 else:
     def all(iterable):
         """If contents of iterable all evaluate as boolean True"""
-        for obj in iterable:
-            if not obj:
-                return False
-        return True
+        return all(iterable)
     def _error_repr(exception):
         """Format an exception instance as Python 2.5 and later do"""
         return exception.__class__.__name__ + repr(exception.args)
@@ -231,14 +228,16 @@ def _format_exc_info(eclass, evalue, tb, limit=None):
     fs_enc = sys.getfilesystemencoding()
     if tb:
         list = [_TB_HEADER]
-        extracted_list = []
-        for filename, lineno, name, line in traceback.extract_tb(tb, limit):
-            extracted_list.append((
+        extracted_list = [
+            (
                 filename.decode(fs_enc, "replace"),
                 lineno,
                 name.decode("ascii", "replace"),
-                line and line.decode(
-                    _get_source_encoding(filename), "replace")))
+                line
+                and line.decode(_get_source_encoding(filename), "replace"),
+            )
+            for filename, lineno, name, line in traceback.extract_tb(tb, limit)
+        ]
         list.extend(traceback.format_list(extracted_list))
     else:
         list = []
@@ -260,8 +259,7 @@ def _format_exc_info(eclass, evalue, tb, limit=None):
             # coding and whether the patch for issue #1031213 is applied, so
             # give up on trying to decode it and just read the file again
             if line:
-                bytestr = linecache.getline(filename, lineno)
-                if bytestr:
+                if bytestr := linecache.getline(filename, lineno):
                     if lineno == 1 and bytestr.startswith("\xef\xbb\xbf"):
                         bytestr = bytestr[3:]
                     line = bytestr.decode(
@@ -275,8 +273,7 @@ def _format_exc_info(eclass, evalue, tb, limit=None):
             list.extend(traceback.format_exception_only(eclass, evalue))
             return list
     sclass = eclass.__name__
-    svalue = _exception_to_text(evalue)
-    if svalue:
+    if svalue := _exception_to_text(evalue):
         list.append("%s: %s\n" % (sclass, svalue))
     elif svalue is None:
         # GZ 2010-05-24: Not a great fallback message, but keep for the moment

@@ -32,14 +32,15 @@ for i in range(1, num_servers + 1):
     config["bootstrap"] = True
     config["commit_rule"] = {"mode": 2}
     config["replicaset_name"] = "mysql.replicaset.0"
-    server_config = {}
-    server_config["region"] = region
-    server_config["hostname"] = hostname
-    server_config["ip_port"] = f"[{ip}]:{port}"
-    server_config["uuid"] = uuid
-    server_config["backed_by_database"] = True
-    server_config["voter_type"] = 0
-    server_config["server_id"] = server_id
+    server_config = {
+        "region": region,
+        "hostname": hostname,
+        "ip_port": f"[{ip}]:{port}",
+        "uuid": uuid,
+        "backed_by_database": True,
+        "voter_type": 0,
+        "server_id": server_id,
+    }
     config["server_config"] = server_config
 
     server_props = []
@@ -48,14 +49,15 @@ for i in range(1, num_servers + 1):
         uuid = execute_sql(j, "select @@global.server_uuid")
         server_id = int(execute_sql(j, "select @@global.server_id"))
         port = execute_sql(j, "select @@global.port")
-        server_prop = {}
-        server_prop["region"] = region
-        server_prop["hostname"] = hostname
-        server_prop["ip_port"] = f"[{ip}]:{port}"
-        server_prop["uuid"] = uuid
-        server_prop["server_id"] = server_id
-        server_prop["backed_by_database"] = True
-        server_prop["voter_type"] = 0
+        server_prop = {
+            "region": region,
+            "hostname": hostname,
+            "ip_port": f"[{ip}]:{port}",
+            "uuid": uuid,
+            "server_id": server_id,
+            "backed_by_database": True,
+            "voter_type": 0,
+        }
         server_props.append(server_prop)
 
     config["raft_topology"] = {"raft_server_properties": server_props}

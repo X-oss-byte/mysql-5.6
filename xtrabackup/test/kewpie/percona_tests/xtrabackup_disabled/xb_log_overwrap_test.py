@@ -48,30 +48,30 @@ class basicTest(mysqlBaseTestCase):
     def test_xb_log_overwrap(self):
         self.servers = servers
         logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, 'full_backup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            suspended_file = os.path.join(backup_path, 'xtrabackup_suspended')
-            exec_path = os.path.dirname(innobackupex)
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, 'full_backup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        suspended_file = os.path.join(backup_path, 'xtrabackup_suspended')
+        exec_path = os.path.dirname(innobackupex)
 
-            # populate our server with a test bed
-            test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
-            retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
-        
+        # populate our server with a test bed
+        test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
+        retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
+
             # take a backup
-            cmd = [ xtrabackup
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--datadir=%s" %master_server.datadir
-                  , "--backup"
-                  , "--target-dir=%s" %backup_path
-                  , "--suspend-at-end"
-                  ]
-            output_file = open(output_path,'w')
+        cmd = [
+            xtrabackup,
+            f"--defaults-file={master_server.cnf_file}",
+            f"--datadir={master_server.datadir}",
+            "--backup",
+            f"--target-dir={backup_path}",
+            "--suspend-at-end",
+        ]
+        with open(output_path,'w') as output_file:
             xtrabackup_subproc = subprocess.Popen( cmd
                                                  , cwd=exec_path
                                                  , env=test_executor.working_environment
@@ -93,7 +93,7 @@ class basicTest(mysqlBaseTestCase):
                 query = "CREATE TABLE tmp%d ENGINE=InnoDB SELECT * FROM DD" %i
                 retcode, result = self.execute_query(query, master_server)
                 self.assertEqual(retcode,0,msg = result)
-            
+
             # Resume the xtrabackup process and remove the suspended file
             xtrabackup_subproc.send_signal(signal.SIGCONT)
             try:
@@ -101,12 +101,10 @@ class basicTest(mysqlBaseTestCase):
             except OSError:
                 pass
             xtrabackup_subproc.wait()
-            output_file.close()
-            output_file = open(output_path,'r')
+        with open(output_path,'r') as output_file:
             output = ''.join(output_file.readlines())
-            output_file.close()
-            expected_warning = "xtrabackup: error: it looks like InnoDB log has wrapped around before xtrabackup could process all records due to either log copying being too slow, or  log files being too small."
-            self.assertEqual(xtrabackup_subproc.returncode,1,msg=output)
+        expected_warning = "xtrabackup: error: it looks like InnoDB log has wrapped around before xtrabackup could process all records due to either log copying being too slow, or  log files being too small."
+        self.assertEqual(xtrabackup_subproc.returncode,1,msg=output)
             # We currently disable this check as it appears wonky
             # 1)  Was testing fine
             # 2)  No such check in original test suite

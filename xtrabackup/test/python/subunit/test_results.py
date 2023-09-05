@@ -238,14 +238,13 @@ class TagCollapsingDecorator(TestResultDecorator):
         :param new_tags: Tags to add,
         :param gone_tags: Tags to remove.
         """
-        if self._current_test_tags is not None:
-            # gather the tags until the test stops.
-            self._current_test_tags[0].update(new_tags)
-            self._current_test_tags[0].difference_update(gone_tags)
-            self._current_test_tags[1].update(gone_tags)
-            self._current_test_tags[1].difference_update(new_tags)
-        else:
+        if self._current_test_tags is None:
             return self.decorated.tags(new_tags, gone_tags)
+        # gather the tags until the test stops.
+        self._current_test_tags[0].update(new_tags)
+        self._current_test_tags[0].difference_update(gone_tags)
+        self._current_test_tags[1].update(gone_tags)
+        self._current_test_tags[1].difference_update(new_tags)
 
 
 class TimeCollapsingDecorator(HookedTestResultDecorator):
@@ -275,10 +274,7 @@ class TimeCollapsingDecorator(HookedTestResultDecorator):
 
 def all_true(bools):
     """Return True if all of 'bools' are True. False otherwise."""
-    for b in bools:
-        if not b:
-            return False
-    return True
+    return all(bools)
 
 
 class TestResultFilter(TestResultDecorator):

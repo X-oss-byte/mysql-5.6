@@ -246,20 +246,25 @@ class TestTestProtocolServerPassThrough(unittest.TestCase):
         self.protocol.lineReceived(_b(" ]\n"))
         self.protocol.lineReceived(_b("]\n"))
         self.assertEqual(self.stdout.getvalue(), _b(""))
-        details = {}
-        details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}),
-            lambda:[_b(
-            "test old mcdonald\n"
-            "failure a\n"
-            "failure: a\n"
-            "error a\n"
-            "error: a\n"
-            "success a\n"
-            "success: a\n"
-            "successful a\n"
-            "successful: a\n"
-            "]\n")])
+        details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [
+                    _b(
+                        "test old mcdonald\n"
+                        "failure a\n"
+                        "failure: a\n"
+                        "error a\n"
+                        "error: a\n"
+                        "success a\n"
+                        "success: a\n"
+                        "successful a\n"
+                        "successful: a\n"
+                        "]\n"
+                    )
+                ],
+            )
+        }
         self.assertEqual(self.client._events, [
             ('startTest', self.test),
             ('addFailure', self.test, details),
@@ -309,7 +314,7 @@ class TestTestProtocolServerLostConnection(unittest.TestCase):
 
     def do_connection_lost(self, outcome, opening):
         self.protocol.lineReceived(_b("test old mcdonald\n"))
-        self.protocol.lineReceived(_b("%s old mcdonald %s" % (outcome, opening)))
+        self.protocol.lineReceived(_b(f"{outcome} old mcdonald {opening}"))
         self.protocol.lostConnection()
         failure = subunit.RemoteError(
             _u("lost connection during %s report of test 'old mcdonald'") %
@@ -421,9 +426,12 @@ class TestTestProtocolServerAddError(unittest.TestCase):
     def test_error_empty_message(self):
         self.protocol.lineReceived(_b("error mcdonalds farm [\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}), lambda:[_b("")])
+        details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [_b("")],
+            )
+        }
         self.assertEqual([
             ('startTest', self.test),
             ('addError', self.test, details),
@@ -434,9 +442,12 @@ class TestTestProtocolServerAddError(unittest.TestCase):
         self.protocol.lineReceived(_b("%s mcdonalds farm [\n" % keyword))
         self.protocol.lineReceived(_b(" ]\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}), lambda:[_b("]\n")])
+        details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [_b("]\n")],
+            )
+        }
         self.assertEqual([
             ('startTest', self.test),
             ('addError', self.test, details),
@@ -479,18 +490,24 @@ class TestTestProtocolServerAddFailure(unittest.TestCase):
     def test_failure_empty_message(self):
         self.protocol.lineReceived(_b("failure mcdonalds farm [\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}), lambda:[_b("")])
+        details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [_b("")],
+            )
+        }
         self.assertFailure(details)
 
     def failure_quoted_bracket(self, keyword):
         self.protocol.lineReceived(_b("%s mcdonalds farm [\n" % keyword))
         self.protocol.lineReceived(_b(" ]\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}), lambda:[_b("]\n")])
+        details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [_b("]\n")],
+            )
+        }
         self.assertFailure(details)
 
     def test_failure_quoted_bracket(self):
@@ -550,13 +567,12 @@ class TestTestProtocolServerAddxFail(unittest.TestCase):
                     lambda:[_b(error_message)])
             if isinstance(self.client, ExtendedTestResult):
                 value = details
+            elif error_message is None:
+                value = subunit.RemoteError()
             else:
-                if error_message is not None:
-                    value = subunit.RemoteError(_u("Text attachment: traceback\n"
-                        "------------\n") + _u(error_message) +
-                        _u("------------\n"))
-                else:
-                    value = subunit.RemoteError()
+                value = subunit.RemoteError(_u("Text attachment: traceback\n"
+                    "------------\n") + _u(error_message) +
+                    _u("------------\n"))
             self.assertEqual([
                 ('startTest', self.test),
                 ('addExpectedFailure', self.test, value),
@@ -654,10 +670,7 @@ class TestTestProtocolServerAddunexpectedSuccess(TestCase):
             details['traceback'] = Content(
                 ContentType("text", "x-traceback", {'charset': 'utf8'}),
                 lambda:[_b(error_message)])
-        if isinstance(self.client, ExtendedTestResult):
-            value = details
-        else:
-            value = None
+        value = details if isinstance(self.client, ExtendedTestResult) else None
         if as_fail:
             self.client._events[1] = self.client._events[1][:2]
             # The value is generated within the extended to original decorator:
@@ -819,9 +832,7 @@ class TestTestProtocolServerAddSuccess(unittest.TestCase):
     def test_success_empty_message(self):
         self.protocol.lineReceived(_b("success mcdonalds farm [\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['message'] = Content(ContentType("text", "plain"),
-            lambda:[_b("")])
+        details = {'message': Content(ContentType("text", "plain"), lambda:[_b("")])}
         self.assertSuccess(details)
 
     def success_quoted_bracket(self, keyword):
@@ -830,9 +841,9 @@ class TestTestProtocolServerAddSuccess(unittest.TestCase):
         self.protocol.lineReceived(_b("%s mcdonalds farm [\n" % keyword))
         self.protocol.lineReceived(_b(" ]\n"))
         self.protocol.lineReceived(_b("]\n"))
-        details = {}
-        details['message'] = Content(ContentType("text", "plain"),
-            lambda:[_b("]\n")])
+        details = {
+            'message': Content(ContentType("text", "plain"), lambda: [_b("]\n")])
+        }
         self.assertSuccess(details)
 
     def test_success_quoted_bracket(self):
@@ -885,15 +896,13 @@ class TestTestProtocolServerStreamTags(unittest.TestCase):
 
     def test_initial_tags(self):
         self.protocol.lineReceived(_b("tags: foo bar:baz  quux\n"))
-        self.assertEqual([
-            ('tags', set(["foo", "bar:baz", "quux"]), set()),
-            ], self.client._events)
+        self.assertEqual(
+            [('tags', {"foo", "bar:baz", "quux"}, set())], self.client._events
+        )
 
     def test_minus_removes_tags(self):
         self.protocol.lineReceived(_b("tags: -bar quux\n"))
-        self.assertEqual([
-            ('tags', set(["quux"]), set(["bar"])),
-            ], self.client._events)
+        self.assertEqual([('tags', {"quux"}, {"bar"})], self.client._events)
 
     def test_tags_do_not_get_set_on_test(self):
         self.protocol.lineReceived(_b("test mcdonalds farm\n"))
@@ -948,7 +957,7 @@ class TestRemotedTestCase(unittest.TestCase):
                          test.shortDescription())
         self.assertEqual("A test description",
                          test.id())
-        self.assertEqual("A test description (subunit.RemotedTestCase)", "%s" % test)
+        self.assertEqual("A test description (subunit.RemotedTestCase)", f"{test}")
         self.assertEqual("<subunit.RemotedTestCase description="
                          "'A test description'>", "%r" % test)
         result = unittest.TestResult()
@@ -1008,9 +1017,12 @@ class TestExecTestCase(unittest.TestCase):
         test.run(result)
         mcdonald = subunit.RemotedTestCase("old mcdonald")
         bing = subunit.RemotedTestCase("bing crosby")
-        bing_details = {}
-        bing_details['traceback'] = Content(ContentType("text", "x-traceback",
-            {'charset': 'utf8'}), lambda:[_b("foo.c:53:ERROR invalid state\n")])
+        bing_details = {
+            'traceback': Content(
+                ContentType("text", "x-traceback", {'charset': 'utf8'}),
+                lambda: [_b("foo.c:53:ERROR invalid state\n")],
+            )
+        }
         an_error = subunit.RemotedTestCase("an error")
         error_details = {}
         self.assertEqual([
@@ -1295,5 +1307,4 @@ class TestTestProtocolClient(unittest.TestCase):
 
 def test_suite():
     loader = subunit.tests.TestUtil.TestLoader()
-    result = loader.loadTestsFromName(__name__)
-    return result
+    return loader.loadTestsFromName(__name__)

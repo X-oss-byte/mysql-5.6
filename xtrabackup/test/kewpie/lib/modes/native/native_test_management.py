@@ -72,10 +72,7 @@ class testCase:
             self.system_manager.logging.debug_class(self)
 
     def should_run(self):
-        if self.skip_flag or self.disable:
-            return 0
-        else:
-            return 1
+        return 0 if self.skip_flag or self.disable else 1
 
 class testManager(test_management.testManager):
     """Deals with scanning test directories, gathering test cases, and 
@@ -87,12 +84,12 @@ class testManager(test_management.testManager):
     def __init__( self, variables, system_manager):
         super(testManager, self).__init__( variables, system_manager)
         server_type = variables['defaultservertype']
-        if server_type == 'mysql' or server_type =='galera':  
+        if server_type in ['mysql', 'galera']:  
             server_type = 'percona'
         if variables['suitepaths']:  
             self.suitepaths = variables['suitepaths']
         else:
-            self.suitepaths = [os.path.join(self.testdir,'%s_tests' %(server_type))]
+            self.suitepaths = [os.path.join(self.testdir, f'{server_type}_tests')]
         if variables['suitelist'] is None:
             self.suitelist = ['main']
         else:
@@ -105,22 +102,20 @@ class testManager(test_management.testManager):
         """
 
         # We know this based on how we organize native test conf files
-        suite_name = os.path.basename(suite_dir) 
-        self.system_manager.logging.verbose("Processing suite: %s" %(suite_name))
+        suite_name = os.path.basename(suite_dir)
+        self.system_manager.logging.verbose(f"Processing suite: {suite_name}")
         testlist = [os.path.join(suite_dir,test_file) for test_file in sorted(os.listdir(suite_dir)) if test_file.endswith('_test.py')]
 
         # Search for specific test names
         if self.desired_tests: # We have specific, named tests we want from the suite(s)
-           tests_to_use = []
-           for test in self.desired_tests:
-               if test.endswith('.py'): 
-                   pass
-               else:
-                   test = test+'.py'
-               test = os.path.join(suite_dir,test)
-               if test in testlist:
-                   tests_to_use.append(test)
-           testlist = tests_to_use
+            tests_to_use = []
+            for test in self.desired_tests:
+                if not test.endswith('.py'):
+                    test = f'{test}.py'
+                test = os.path.join(suite_dir,test)
+                if test in testlist:
+                    tests_to_use.append(test)
+            testlist = tests_to_use
         for test_case in testlist:
             self.add_test(self.process_test_file( suite_name
                                                 , test_case
@@ -171,18 +166,20 @@ class testManager(test_management.testManager):
         test_comment = None
         skip_flag, skip_reason, expect_fail = self.pretest_check(testfile)
         server_requirements, server_requests = self.get_server_reqs(testfile)
-        
-        return testCase( self.system_manager
-                       , name = test_name
-                       , fullname = "%s.%s" %(suite_name, test_name)
-                       , server_requirements = server_requirements
-                       , cnf_path = None
-                       , request_dict = server_requests
-                       , skip_flag = skip_flag 
-                       , skip_reason = skip_reason
-                       , expect_fail = expect_fail
-                       , test_path = testfile
-                       , debug = self.debug )
+
+        return testCase(
+            self.system_manager,
+            name=test_name,
+            fullname=f"{suite_name}.{test_name}",
+            server_requirements=server_requirements,
+            cnf_path=None,
+            request_dict=server_requests,
+            skip_flag=skip_flag,
+            skip_reason=skip_reason,
+            expect_fail=expect_fail,
+            test_path=testfile,
+            debug=self.debug,
+        )
 
 
     def record_test_result(self, test_case, test_status, output, exec_time):

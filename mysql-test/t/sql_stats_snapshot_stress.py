@@ -48,11 +48,7 @@ def generate_load(worker):
                           port=args.port,
                           db=args.database)
     i = 0
-    if worker_id >= 2:
-        op = 1
-    else:
-        op = 2
-
+    op = 1 if worker_id >= 2 else 2
     while not worker.stop_flag:
         # op = random.randint(1, 10)
         start_time = datetime.datetime.now()
@@ -61,13 +57,13 @@ def generate_load(worker):
             if op == 1:
                 op_str = "insert"
                 t = random.randint(1, 1000)
-                table = "tt" + str(t)
-                cur.execute("create temporary table %s (a int)" % table)
-                stmt = "select * from " + table
+                table = f"tt{t}"
+                cur.execute(f"create temporary table {table} (a int)")
+                stmt = f"select * from {table}"
                 for n in range(0, 100):
-                    stmt = stmt + " union select " + str(n)
+                    stmt = f"{stmt} union select {str(n)}"
                     cur.execute(stmt)
-                cur.execute("drop table " + table)
+                cur.execute(f"drop table {table}")
             else:
                 time.sleep(random.randint(1, 5))
                 op_str = "snapshot"

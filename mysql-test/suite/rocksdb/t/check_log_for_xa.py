@@ -22,6 +22,5 @@ with open(log_path) as log:
   for line in log:
     line = line.strip()
     for f in active_filters:
-      match = f[1].search(line)
-      if match:
-        print("**found '%s' log entry**" % f[0])
+      if match := f[1].search(line):
+        print(f"**found '{f[0]}' log entry**")

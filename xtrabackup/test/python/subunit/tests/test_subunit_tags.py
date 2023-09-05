@@ -65,5 +65,4 @@ class TestSubUnitTags(unittest.TestCase):
 
 def test_suite():
     loader = subunit.tests.TestUtil.TestLoader()
-    result = loader.loadTestsFromName(__name__)
-    return result
+    return loader.loadTestsFromName(__name__)

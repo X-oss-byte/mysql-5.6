@@ -42,7 +42,7 @@ class TestCommand(Command):
                 raise DistutilsOptionError(
                     "You must specify a module or a suite to run tests from")
             else:
-                self.test_suite = self.test_module+".test_suite"
+                self.test_suite = f"{self.test_module}.test_suite"
         elif self.test_module:
             raise DistutilsOptionError(
                 "You may specify a module or a suite, but not both")

@@ -30,24 +30,21 @@ def execute_sqlbench(test_cmd, test_executor, servers):
     
     bot = test_executor
     sqlbench_outfile = os.path.join(bot.logdir,'sqlbench.out')
-    sqlbench_output = open(sqlbench_outfile,'w')
-    bot.logging.info("Executing sqlbench:  %s" %(test_cmd))
-    bot.logging.info("This may take some time...")
-    sqlbench_subproc = subprocess.Popen( test_cmd
-                                       , shell=True
-                                       , cwd=os.path.join(bot.system_manager.testdir, 'sql-bench')
-                                       , env=bot.working_environment
-                                       , stdout = sqlbench_output
-                                       , stderr = subprocess.STDOUT
-                                       )
-    sqlbench_subproc.wait()
-    retcode = sqlbench_subproc.returncode     
+    with open(sqlbench_outfile,'w') as sqlbench_output:
+        bot.logging.info(f"Executing sqlbench:  {test_cmd}")
+        bot.logging.info("This may take some time...")
+        sqlbench_subproc = subprocess.Popen( test_cmd
+                                           , shell=True
+                                           , cwd=os.path.join(bot.system_manager.testdir, 'sql-bench')
+                                           , env=bot.working_environment
+                                           , stdout = sqlbench_output
+                                           , stderr = subprocess.STDOUT
+                                           )
+        sqlbench_subproc.wait()
+        retcode = sqlbench_subproc.returncode     
 
-    sqlbench_output.close()
-    sqlbench_file = open(sqlbench_outfile,'r')
-    output = ''.join(sqlbench_file.readlines())
-    sqlbench_file.close()
-
+    with open(sqlbench_outfile,'r') as sqlbench_file:
+        output = ''.join(sqlbench_file.readlines())
     bot.current_test_retcode = retcode
     bot.current_test_output = output
     test_status = process_sqlbench_output(bot)
@@ -63,8 +60,5 @@ def process_sqlbench_output(bot):
         if 'Failed' in inline:
             error_flag= True
             logging.info(inline.strip())
-    if bot.current_test_retcode == 0 and not error_flag:
-        return 'pass'
-    else:
-        return 'fail'
+    return 'pass' if bot.current_test_retcode == 0 and not error_flag else 'fail'
 

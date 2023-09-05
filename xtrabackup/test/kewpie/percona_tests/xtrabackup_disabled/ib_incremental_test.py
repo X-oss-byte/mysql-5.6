@@ -43,162 +43,161 @@ class basicTest(mysqlBaseTestCase):
         os.mkdir(backup_path)
 
     def load_table(self, table_name, row_count, server):
-        queries = []
-        for i in range(row_count):
-            queries.append("INSERT INTO %s VALUES (%d, %d)" %(table_name,i, row_count))
+        queries = [
+            "INSERT INTO %s VALUES (%d, %d)" % (table_name, i, row_count)
+            for i in range(row_count)
+        ]
         retcode, result = self.execute_queries(queries, server)
         self.assertEqual(retcode, 0, msg=result)
 
 
     def test_ib_incremental(self):
         self.servers = servers
-        logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
-            table_name = "`test`"
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
+        table_name = "`test`"
 
             # populate our server with a test bed
-            queries = ["DROP TABLE IF EXISTS %s" %(table_name)
-                      ,("CREATE TABLE %s "
-                        "(`a` int(11) DEFAULT NULL, "
-                        "`number` int(11) DEFAULT NULL) "
-                        " ENGINE=InnoDB DEFAULT CHARSET=latin1"
-                        %(table_name)
-                       )
-                      ]
-            retcode, result = self.execute_queries(queries, master_server)
-            self.assertEqual(retcode, 0, msg = result) 
-            row_count = 100
-            self.load_table(table_name, row_count, master_server)
-        
-            # take a backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  #, "--port=%d" %master_server.master_port
-                  #, "--host=127.0.0.1"
-                  #, "--no-timestamp"
-                  , "--ibbackup=%s" %xtrabackup
-                  , backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertEqual(retcode,0,output)
-            main_backup_path = self.find_backup_path(output) 
+        queries = [
+            f"DROP TABLE IF EXISTS {table_name}",
+            f"CREATE TABLE {table_name} (`a` int(11) DEFAULT NULL, `number` int(11) DEFAULT NULL)  ENGINE=InnoDB DEFAULT CHARSET=latin1",
+        ]
+        retcode, result = self.execute_queries(queries, master_server)
+        self.assertEqual(retcode, 0, msg = result)
+        self.load_table(table_name, 100, master_server)
 
-            # load more data
-            row_count = 500
-            self.load_table(table_name, row_count, master_server)
+            # take a backup
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            f"--ibbackup={xtrabackup}",
+            backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertEqual(retcode,0,output)
+        main_backup_path = self.find_backup_path(output) 
+
+        self.load_table(table_name, 500, master_server)
 
             # Get a checksum for our table
-            query = "CHECKSUM TABLE %s" %table_name
-            retcode, orig_checksum = self.execute_query(query, master_server)
-            self.assertEqual(retcode, 0, msg=result)
-            logging.test_debug("Original checksum: %s" %orig_checksum)
+        query = f"CHECKSUM TABLE {table_name}"
+        retcode, orig_checksum = self.execute_query(query, master_server)
+        self.assertEqual(retcode, 0, msg=result)
+        logging = test_executor.logging
+        logging.test_debug(f"Original checksum: {orig_checksum}")
 
-            # Take an incremental backup
-            inc_backup_path = os.path.join(backup_path,'backup_inc1')
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  #, "--port=%d" %master_server.master_port
-                  #, "--host=127.0.0.1" 
-                  #, "--no-timestamp"
-                  , "--incremental"
-                  , "--incremental-basedir=%s" %main_backup_path
-                  , "--ibbackup=%s" %xtrabackup
-                  , backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            inc_backup_path = self.find_backup_path(output) 
-            self.assertTrue(retcode==0,output)
-        
-            # shutdown our server
-            master_server.stop()
+        # Take an incremental backup
+        inc_backup_path = os.path.join(backup_path,'backup_inc1')
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            "--incremental",
+            f"--incremental-basedir={main_backup_path}",
+            f"--ibbackup={xtrabackup}",
+            backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        inc_backup_path = self.find_backup_path(output)
+        self.assertTrue(retcode==0,output)
+
+        # shutdown our server
+        master_server.stop()
 
             # prepare our main backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  , "--apply-log"
-                  , "--redo-only"
-                  , "--use-memory=500M"
-                  , "--ibbackup=%s" %xtrabackup
-                  , main_backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertEqual(retcode,0,output)
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            "--apply-log",
+            "--redo-only",
+            "--use-memory=500M",
+            f"--ibbackup={xtrabackup}",
+            main_backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertEqual(retcode,0,output)
 
             # prepare our incremental backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  , "--apply-log"
-                  , "--redo-only"
-                  , "--use-memory=500M"
-                  , "--ibbackup=%s" %xtrabackup
-                  , "--incremental-dir=%s" %inc_backup_path
-                  , main_backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0,output)
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            "--apply-log",
+            "--redo-only",
+            "--use-memory=500M",
+            f"--ibbackup={xtrabackup}",
+            f"--incremental-dir={inc_backup_path}",
+            main_backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0,output)
 
             # do final prepare on main backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  , "--apply-log"
-                  , "--use-memory=500M"
-                  , "--ibbackup=%s" %xtrabackup
-                  , main_backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertEqual(retcode, 0,msg = "Command: %s failed with output: %s" %(cmd,output))
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            "--apply-log",
+            "--use-memory=500M",
+            f"--ibbackup={xtrabackup}",
+            main_backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertEqual(
+            retcode, 0, msg=f"Command: {cmd} failed with output: {output}"
+        )
 
 
-            # remove old datadir
-            shutil.rmtree(master_server.datadir)
-            os.mkdir(master_server.datadir)
-        
+        # remove old datadir
+        shutil.rmtree(master_server.datadir)
+        os.mkdir(master_server.datadir)
+
             # restore from backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--socket=%s" %master_server.socket_file
-                  , "--copy-back"
-                  , "--ibbackup=%s" %xtrabackup
-                  , main_backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            self.assertTrue(retcode==0, output)
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            f"--socket={master_server.socket_file}",
+            "--copy-back",
+            f"--ibbackup={xtrabackup}",
+            main_backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        self.assertTrue(retcode==0, output)
 
-            # restart server (and ensure it doesn't crash)
-            master_server.start()
-            self.assertTrue(master_server.ping(quiet=True), 'Server failed restart from restored datadir...')
+        # restart server (and ensure it doesn't crash)
+        master_server.start()
+        self.assertTrue(master_server.ping(quiet=True), 'Server failed restart from restored datadir...')
 
             # Get a checksum for our table
-            query = "CHECKSUM TABLE %s" %table_name
-            retcode, restored_checksum = self.execute_query(query, master_server)
-            self.assertEqual(retcode, 0, msg=result)
-            logging.test_debug("Restored checksum: %s" %restored_checksum)
+        query = f"CHECKSUM TABLE {table_name}"
+        retcode, restored_checksum = self.execute_query(query, master_server)
+        self.assertEqual(retcode, 0, msg=result)
+        logging.test_debug(f"Restored checksum: {restored_checksum}")
 
-            self.assertEqual(orig_checksum, restored_checksum, msg = "Orig: %s | Restored: %s" %(orig_checksum, restored_checksum))
+        self.assertEqual(
+            orig_checksum,
+            restored_checksum,
+            msg=f"Orig: {orig_checksum} | Restored: {restored_checksum}",
+        )
  
 

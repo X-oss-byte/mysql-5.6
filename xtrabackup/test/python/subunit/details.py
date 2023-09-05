@@ -41,11 +41,7 @@ class SimpleDetailsParser(DetailsParser):
         if line == end_marker:
             self._state.endDetails()
             return
-        if line[0:2] == quoted_marker:
-            # quoted ] start
-            self._message += line[1:]
-        else:
-            self._message += line
+        self._message += line[1:] if line[:2] == quoted_marker else line
 
     def get_details(self, style=None):
         result = {}
@@ -58,10 +54,7 @@ class SimpleDetailsParser(DetailsParser):
                 {"charset": "utf8"}),
                 lambda:[self._message])
         else:
-            if style == 'skip':
-                name = 'reason'
-            else:
-                name = 'message'
+            name = 'reason' if style == 'skip' else 'message'
             result[name] = content.Content(
                 content_type.ContentType("text", "plain"),
                 lambda:[self._message])

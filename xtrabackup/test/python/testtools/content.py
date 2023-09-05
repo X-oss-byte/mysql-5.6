@@ -33,10 +33,8 @@ def _iter_chunks(stream, chunk_size):
     :param stream: A file-like object to read from.
     :param chunk_size: The size of each read from 'stream'.
     """
-    chunk = stream.read(chunk_size)
-    while chunk:
+    while chunk := stream.read(chunk_size):
         yield chunk
-        chunk = stream.read(chunk_size)
 
 
 class Content(object):
@@ -88,8 +86,7 @@ class Content(object):
             decoder = codecs.getincrementaldecoder(encoding)()
             for bytes in self.iter_bytes():
                 yield decoder.decode(bytes)
-            final = decoder.decode(_b(''), True)
-            if final:
+            if final := decoder.decode(_b(''), True):
                 yield final
         except AttributeError:
             # < 2.5
@@ -155,13 +152,9 @@ def content_from_file(path, content_type=None, chunk_size=DEFAULT_CHUNK_SIZE,
     if content_type is None:
         content_type = UTF8_TEXT
     def reader():
-        # This should be try:finally:, but python2.4 makes that hard. When
-        # We drop older python support we can make this use a context manager
-        # for maximum simplicity.
-        stream = open(path, 'rb')
-        for chunk in _iter_chunks(stream, chunk_size):
-            yield chunk
-        stream.close()
+        with open(path, 'rb') as stream:
+            yield from _iter_chunks(stream, chunk_size)
+
     return content_from_reader(reader, content_type, buffer_now)
 
 

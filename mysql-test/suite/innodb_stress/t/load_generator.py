@@ -26,26 +26,24 @@ def sha1(x):
 # Should be deterministic given an idx
 def get_msg(do_blob, idx):
   random.seed(idx);
-  if do_blob:
-    blob_length = random.randint(1, 24000)
-  else:
-    blob_length = random.randint(1, 255)
-
+  blob_length = random.randint(1, 24000) if do_blob else random.randint(1, 255)
   if random.randint(1, 2) == 1:
     # blob that cannot be compressed (well, compresses to 85% of original size)
-    return ''.join([random.choice(CHARS) for x in range(blob_length)])
+    return ''.join([random.choice(CHARS) for _ in range(blob_length)])
   else:
     # blob that can be compressed
     return random.choice(CHARS) * blob_length
 
 def is_connection_error(exc):
   error_code = exc.args[0]
-  return (error_code == MySQLdb.constants.CR.CONNECTION_ERROR or
-          error_code == MySQLdb.constants.CR.CONN_HOST_ERROR or
-          error_code == MySQLdb.constants.CR.SERVER_LOST or
-          error_code == MySQLdb.constants.CR.SERVER_GONE_ERROR or
-          error_code == MySQLdb.constants.ER.QUERY_INTERRUPTED or
-          error_code == MySQLdb.constants.ER.SERVER_SHUTDOWN)
+  return error_code in [
+      MySQLdb.constants.CR.CONNECTION_ERROR,
+      MySQLdb.constants.CR.CONN_HOST_ERROR,
+      MySQLdb.constants.CR.SERVER_LOST,
+      MySQLdb.constants.CR.SERVER_GONE_ERROR,
+      MySQLdb.constants.ER.QUERY_INTERRUPTED,
+      MySQLdb.constants.ER.SERVER_SHUTDOWN,
+  ]
 
 class ValidateError(Exception):
   """Raised when validate_msg fails."""
@@ -61,7 +59,7 @@ class WorkerThread(threading.Thread):
 
   def __init__(self, base_log_name):
     threading.Thread.__init__(self)
-    self.log = open('/%s/%s.log' % (LG_TMP_DIR, base_log_name), 'a')
+    self.log = open(f'/{LG_TMP_DIR}/{base_log_name}.log', 'a')
     self.exception = None
 
   def run(self):
@@ -131,27 +129,45 @@ def populate_table(con, num_records_before, do_blob, log, document_table):
   return True
 
 def get_update(msg, idx, document_table):
-    if document_table:
-        return """
+  if document_table:
+    return """
                UPDATE t1 SET doc = '{"msg_prefix" : "%s", "msg" : "%s", "msg_length" : %d,
-               "msg_checksum" : "%s"}' WHERE id=%d""" % (msg[0:255], msg, len(msg), sha1(msg), idx)
-    else:
-        return """
+               "msg_checksum" : "%s"}' WHERE id=%d""" % (
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+        idx,
+    )
+  else:
+    return """
             UPDATE t1 SET msg_prefix='%s',msg='%s',msg_length=%d,
-            msg_checksum='%s' WHERE id=%d """ % (msg[0:255], msg, len(msg), sha1(msg), idx)
+            msg_checksum='%s' WHERE id=%d """ % (
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+        idx,
+    )
 
 def get_insert_on_dup(msg, idx, document_table):
-    if document_table:
-        return """
+  if document_table:
+    return """
               INSERT INTO t1 (id, doc) VALUES
               (%d, '{"msg_prefix" : "%s", "msg": "%s", "msg_length" : %d,
                      "msg_checksum" : "%s"}')
               ON DUPLICATE KEY UPDATE
               id=VALUES(id),
               doc=VALUES(doc)
-              """ % (idx, msg[0:255], msg, len(msg), sha1(msg))
-    else:
-        return """
+              """ % (
+        idx,
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+    )
+  else:
+    return """
             INSERT INTO t1 (msg_prefix,msg,msg_length,msg_checksum,id)
             VALUES ('%s','%s',%d,'%s',%d)
             ON DUPLICATE KEY UPDATE
@@ -159,33 +175,61 @@ def get_insert_on_dup(msg, idx, document_table):
             msg=VALUES(msg),
             msg_length=VALUES(msg_length),
             msg_checksum=VALUES(msg_checksum),
-            id=VALUES(id)""" % (msg[0:255], msg, len(msg), sha1(msg), idx)
+            id=VALUES(id)""" % (
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+        idx,
+    )
 
 def get_insert(msg, idx, document_table):
-      if document_table:
-          return """
+  if document_table:
+    return """
               INSERT INTO t1 (id, doc) VALUES
               (%d, '{"msg_prefix" : "%s", "msg": "%s", "msg_length" : %d,
               "msg_checksum" : "%s"}')
-              """ % (idx, msg[0:255], msg, len(msg), sha1(msg))
-      else:
-          return """
+              """ % (
+        idx,
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+    )
+  else:
+    return """
               INSERT INTO t1(id,msg_prefix,msg,msg_length,msg_checksum)
               VALUES (%d,'%s','%s',%d,'%s')
-              """ % (idx, msg[0:255], msg, len(msg), sha1(msg))
+              """ % (
+        idx,
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+    )
 
 def get_insert_null(msg, document_table):
-    if document_table:
-        return """
+  if document_table:
+    return """
             INSERT INTO t1 (id, doc) VALUES
             (NULL, '{"msg_prefix" : "%s", "msg": "%s", "msg_length" : %d,
             "msg_checksum" : "%s"}')
-            """ % (msg[0:255], msg, len(msg), sha1(msg))
-    else:
-        return """
+            """ % (
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+    )
+  else:
+    return """
             INSERT INTO t1 (msg_prefix,msg,msg_length,msg_checksum,id) VALUES
             ('%s','%s',%d,'%s',NULL)
-            """ % (msg[0:255], msg, len(msg), sha1(msg))
+            """ % (
+        msg[:255],
+        msg,
+        len(msg),
+        sha1(msg),
+    )
 
 class ChecksumWorker(WorkerThread):
   def __init__(self, con, checksum):
@@ -254,7 +298,7 @@ class Worker(WorkerThread):
 
   def validate_msg(self, msg_prefix, msg, msg_length, msg_checksum, idx):
 
-    prefix_match = msg_prefix == msg[0:255]
+    prefix_match = msg_prefix == msg[:255]
 
     checksum = sha1(msg)
     if type(msg_checksum) == bytes:
@@ -264,11 +308,19 @@ class Worker(WorkerThread):
     len_match = len(msg) == msg_length
 
     if not prefix_match or not checksum_match or not len_match:
-      errmsg = "id(%d), length(%s,%d,%d), checksum(%s,%s,%s) prefix(%s,%s,%s)" % (
-          idx,
-          len_match, len(msg), msg_length,
-          checksum_match, checksum, msg_checksum,
-          prefix_match, msg_prefix, msg[0:255])
+      errmsg = ("id(%d), length(%s,%d,%d), checksum(%s,%s,%s) prefix(%s,%s,%s)" %
+                (
+                    idx,
+                    len_match,
+                    len(msg),
+                    msg_length,
+                    checksum_match,
+                    checksum,
+                    msg_checksum,
+                    prefix_match,
+                    msg_prefix,
+                    msg[:255],
+                ))
       print(errmsg, file=self.log)
       raise ValidateError(errmsg)
     else:
@@ -276,10 +328,7 @@ class Worker(WorkerThread):
 
   # Check to see if the idx is in the first column of res_array
   def check_exists(self, res_array, idx):
-    for res in res_array:
-      if res[0] == idx:
-        return True
-    return False
+    return any(res[0] == idx for res in res_array)
 
   def runme(self):
     self.start_time = time.time()
@@ -293,8 +342,6 @@ class Worker(WorkerThread):
       self.loop_num += 1
 
       try:
-        stmt = None
-
         # Randomly toggle innodb_prefix_index_cluster_optimization 5%
         # of the time
         if self.rand.randint(0, 20) == 0:
@@ -319,21 +366,22 @@ class Worker(WorkerThread):
           self.num_primary_select += 1
         elif r <= 9:
           if self.document_table:
-            cur.execute("SELECT doc.msg_prefix,doc.msg,doc.msg_length, "
-                        "doc.msg_checksum FROM t1 use document keys WHERE doc.msg_prefix='%s'"
-                        % msg[0:255])
+            cur.execute(
+                f"SELECT doc.msg_prefix,doc.msg,doc.msg_length, doc.msg_checksum FROM t1 use document keys WHERE doc.msg_prefix='{msg[:255]}'"
+            )
           else:
-            cur.execute("SELECT msg_prefix,msg,msg_length,msg_checksum FROM t1 WHERE msg_prefix='%s'" % msg[0:255])
+            cur.execute(
+                f"SELECT msg_prefix,msg,msg_length,msg_checksum FROM t1 WHERE msg_prefix='{msg[:255]}'"
+            )
           res = cur.fetchone()
           self.num_secondary_select += 1
-        # Query only the secondary index
         else:
           if self.document_table:
-            cur.execute("SELECT id, doc.msg_prefix FROM t1 use document keys "
-                        "WHERE doc.msg_prefix='%s'" % msg[0:255])
+            cur.execute(
+                f"SELECT id, doc.msg_prefix FROM t1 use document keys WHERE doc.msg_prefix='{msg[:255]}'"
+            )
           else:
-            cur.execute("SELECT id, msg_prefix FROM t1 WHERE "
-                        "msg_prefix='%s'" % msg[0:255])
+            cur.execute(f"SELECT id, msg_prefix FROM t1 WHERE msg_prefix='{msg[:255]}'")
           res = cur.fetchall()
           self.num_secondary_only_select += 1
         # Don't validate if r > 9 because we don't have sufficient columns.
@@ -341,6 +389,7 @@ class Worker(WorkerThread):
           self.validate_msg(res[0], res[1], int(res[2]), res[3], idx)
 
         insert_with_index = False
+        stmt = None
         if insert_or_update:
           if res:
             if self.rand.randint(0, 1):
@@ -369,20 +418,20 @@ class Worker(WorkerThread):
         # 10% probability of checking to see the key exists in secondary index
         if self.secondary_checks and self.rand.randint(1, 10) == 1:
           if self.document_table:
-            cur.execute("SELECT id, doc.msg_prefix FROM t1 use document keys WHERE "
-                        "doc.msg_prefix='%s'" % msg[0:255])
+            cur.execute(
+                f"SELECT id, doc.msg_prefix FROM t1 use document keys WHERE doc.msg_prefix='{msg[:255]}'"
+            )
           else:
-            cur.execute("SELECT id, msg_prefix FROM t1 WHERE msg_prefix='%s'" % msg[0:255])
+            cur.execute(f"SELECT id, msg_prefix FROM t1 WHERE msg_prefix='{msg[:255]}'")
           res_array = cur.fetchall()
           if insert_or_update:
             if insert_with_index:
               if not self.check_exists(res_array, idx):
                 print("Error: Inserted row doesn't exist in secondary index", file=self.log)
                 raise Exception("Error: Inserted row doesn't exist in secondary index")
-          else:
-            if self.check_exists(res_array, idx):
-              print("Error: Deleted row still exists in secondary index", file=self.log)
-              raise Exception("Error: Deleted row still exists in secondary index")
+          elif self.check_exists(res_array, idx):
+            print("Error: Deleted row still exists in secondary index", file=self.log)
+            raise Exception("Error: Deleted row still exists in secondary index")
 
 
         if (self.loop_num % 100) == 0:
@@ -402,12 +451,12 @@ class Worker(WorkerThread):
           print("mysqld down, transaction %d" % self.xid, file=self.log)
           return
         else:
-          print("mysql error for stmt(%s) %s" % (stmt, e), file=self.log)
+          print(f"mysql error for stmt({stmt}) {e}", file=self.log)
 
     try:
       self.con.commit()
     except Exception as e:
-      print("commit error %s" % e, file=self.log)
+      print(f"commit error {e}", file=self.log)
 
 
 class DefragmentWorker(WorkerThread):
@@ -464,15 +513,13 @@ class DefragmentWorker(WorkerThread):
         self.num_defragment += 1
         time.sleep(random.randint(0, 10))
       except (MySQLdb.OperationalError, MySQLdb.InternalError) as e:
-        # Handle crash tests that kill the server while defragment runs.
-        if is_connection_error(e):
-          print("Server crashed while defrag was running.", file=self.log)
-          self.reconnect()
-        else:
+        if not is_connection_error(e):
           raise e
+        print("Server crashed while defrag was running.", file=self.log)
+        self.reconnect()
 
 
-if  __name__ == '__main__':
+if __name__ == '__main__':
   global LG_TMP_DIR
 
   pid_file = sys.argv[1]
@@ -496,7 +543,7 @@ if  __name__ == '__main__':
   defrag_worker = None
   workers = []
   server_pid = int(open(pid_file).read())
-  log = open('/%s/main.log' % LG_TMP_DIR, 'a')
+  log = open(f'/{LG_TMP_DIR}/main.log', 'a')
 
 #  print( "kill_db_after = ",kill_db_after," num_records_before = ", \)
 #num_records_before, " num_workers= ",num_workers, "num_xactions_per_worker =",\
@@ -508,8 +555,8 @@ if  __name__ == '__main__':
     con = None
     retry = 3
     while not con and retry > 0:
-        con = MySQLdb.connect(user=user, host=host, port=port, db=db)
-        retry = retry - 1
+      con = MySQLdb.connect(user=user, host=host, port=port, db=db)
+      retry -= 1
     if not con:
         print("Cannot connect to MySQL after 3 attempts.", file=log)
         sys.exit(1)

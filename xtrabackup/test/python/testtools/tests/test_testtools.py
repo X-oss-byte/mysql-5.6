@@ -65,8 +65,8 @@ class TestPlaceHolder(TestCase):
         # repr(placeholder) shows you how the object was constructed.
         test = PlaceHolder("test id")
         self.assertEqual(
-            "<testtools.testcase.PlaceHolder(%s)>" % repr(test.id()),
-            repr(test))
+            f"<testtools.testcase.PlaceHolder({repr(test.id())})>", repr(test)
+        )
 
     def test_repr_with_description(self):
         # repr(placeholder) shows you how the object was constructed.
@@ -298,8 +298,9 @@ class TestAssertions(TestCase):
             self.failureException,
             self.assertRaises, expectedExceptions, lambda: None)
         self.assertEqual(
-            '%s not raised, None returned instead.'
-            % self._formatTypes(expectedExceptions), str(failure))
+            f'{self._formatTypes(expectedExceptions)} not raised, None returned instead.',
+            str(failure),
+        )
 
     def assertFails(self, message, function, *args, **kwargs):
         """Assert that function raises a failure with the given message."""
@@ -362,26 +363,31 @@ class TestAssertions(TestCase):
         # assertIsInstance(obj, klass) fails the test when obj is not an
         # instance of klass.
 
+
         class Foo(object):
             """Simple class for testing assertIsInstance."""
-
         self.assertFails(
-            '42 is not an instance of %s' % self._formatTypes(Foo),
-            self.assertIsInstance, 42, Foo)
+            f'42 is not an instance of {self._formatTypes(Foo)}',
+            self.assertIsInstance,
+            42,
+            Foo,
+        )
 
     def test_assertIsInstance_failure_multiple_classes(self):
         # assertIsInstance(obj, (klass1, klass2)) fails the test when obj is
         # not an instance of klass1 or klass2.
 
+
         class Foo(object):
             """Simple class for testing assertIsInstance."""
-
         class Bar(object):
             """Another simple class for testing assertIsInstance."""
-
         self.assertFails(
-            '42 is not an instance of %s' % self._formatTypes([Foo, Bar]),
-            self.assertIsInstance, 42, (Foo, Bar))
+            f'42 is not an instance of {self._formatTypes([Foo, Bar])}',
+            self.assertIsInstance,
+            42,
+            (Foo, Bar),
+        )
 
     def test_assertIsInstance_overridden_message(self):
         # assertIsInstance(obj, klass, msg) permits a custom message.
@@ -470,20 +476,19 @@ class TestAssertions(TestCase):
              'Blair': 'To shout loudly',
              'Brown': 'The colour of healthy human faeces'}
         expected_error = '\n'.join(
-            [message,
-             'not equal:',
-             'a = %s' % pformat(a),
-             'b = %s' % pformat(b),
-             ''])
-        expected_error = '\n'.join([
-            'Match failed. Matchee: "%r"' % b,
-            'Matcher: Annotate(%r, Equals(%r))' % (message, a),
-            'Difference: !=:',
-            'reference = %s' % pformat(a),
-            'actual = %s' % pformat(b),
-            ': ' + message,
-            ''
-            ])
+            [message, 'not equal:', f'a = {pformat(a)}', f'b = {pformat(b)}', '']
+        )
+        expected_error = '\n'.join(
+            [
+                'Match failed. Matchee: "%r"' % b,
+                'Matcher: Annotate(%r, Equals(%r))' % (message, a),
+                'Difference: !=:',
+                f'reference = {pformat(a)}',
+                f'actual = {pformat(b)}',
+                f': {message}',
+                '',
+            ]
+        )
         self.assertFails(expected_error, self.assertEqual, a, b, message)
         self.assertFails(expected_error, self.assertEquals, a, b, message)
         self.assertFails(expected_error, self.failUnlessEqual, a, b, message)
@@ -635,13 +640,16 @@ class TestAddCleanup(TestCase):
             except Exception:
                 exc_info2 = sys.exc_info()
             raise MultipleExceptions(exc_info1, exc_info2)
+
         self.test.addCleanup(raiseMany)
         self.logging_result = ExtendedTestResult()
         self.test.run(self.logging_result)
         self.assertEqual(['startTest', 'addError', 'stopTest'],
             [event[0] for event in self.logging_result._events])
-        self.assertEqual(set(['traceback', 'traceback-1']),
-            set(self.logging_result._events[1][2].keys()))
+        self.assertEqual(
+            {'traceback', 'traceback-1'},
+            set(self.logging_result._events[1][2].keys()),
+        )
 
     def test_multipleCleanupErrorsReported(self):
         # Errors from all failing cleanups are reported as separate backtraces.
@@ -651,8 +659,10 @@ class TestAddCleanup(TestCase):
         self.test.run(self.logging_result)
         self.assertEqual(['startTest', 'addError', 'stopTest'],
             [event[0] for event in self.logging_result._events])
-        self.assertEqual(set(['traceback', 'traceback-1']),
-            set(self.logging_result._events[1][2].keys()))
+        self.assertEqual(
+            {'traceback', 'traceback-1'},
+            set(self.logging_result._events[1][2].keys()),
+        )
 
     def test_multipleErrorsCoreAndCleanupReported(self):
         # Errors from all failing cleanups are reported, with stopTest,
@@ -664,8 +674,10 @@ class TestAddCleanup(TestCase):
         self.test.run(self.logging_result)
         self.assertEqual(['startTest', 'addError', 'stopTest'],
             [event[0] for event in self.logging_result._events])
-        self.assertEqual(set(['traceback', 'traceback-1', 'traceback-2']),
-            set(self.logging_result._events[1][2].keys()))
+        self.assertEqual(
+            {'traceback', 'traceback-1', 'traceback-2'},
+            set(self.logging_result._events[1][2].keys()),
+        )
 
 
 class TestWithDetails(TestCase):
@@ -687,7 +699,7 @@ class TestWithDetails(TestCase):
             ]
         self.assertEqual(3, len(result._events))
         self.assertEqual(expected[0], result._events[0])
-        self.assertEqual(expected[1], result._events[1][0:2])
+        self.assertEqual(expected[1], result._events[1][:2])
         # Checking the TB is right is rather tricky. doctest line matching
         # would help, but 'meh'.
         self.assertEqual(sorted(expected_keys),
@@ -703,11 +715,11 @@ class TestExpectedFailure(TestWithDetails):
     """Tests for expected failures and unexpected successess."""
 
     def make_unexpected_case(self):
+
         class Case(TestCase):
             def test(self):
                 raise testcase._UnexpectedSuccess
-        case = Case('test')
-        return case
+        return Case('test')
 
     def test_raising__UnexpectedSuccess_py27(self):
         case = self.make_unexpected_case()
@@ -738,8 +750,7 @@ class TestExpectedFailure(TestWithDetails):
                 self.addDetail("foo", content)
                 self.expectFailure("we are sad", self.assertEqual,
                     1, 0)
-        case = Case('test')
-        return case
+        return Case('test')
 
     def make_xfail_case_succeeds(self):
         content = self.get_content()
@@ -748,8 +759,7 @@ class TestExpectedFailure(TestWithDetails):
                 self.addDetail("foo", content)
                 self.expectFailure("we are sad", self.assertEqual,
                     1, 1)
-        case = Case('test')
-        return case
+        return Case('test')
 
     def test_expectFailure_KnownFailure_extended(self):
         case = self.make_xfail_case_xfails()

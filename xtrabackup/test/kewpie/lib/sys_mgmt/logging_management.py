@@ -95,12 +95,12 @@ class loggingManager():
             self._write_message("TEST_DEBUG", msg)
  
     def debug_class(self,codeClass):
-      if self.debug_flag:
-        self._write_message("DEBUG**",codeClass)
-        skip_keys = ['skip_keys', 'debug', 'verbose']
-        for key, item in sorted(vars(codeClass).items()):
-            if key not in codeClass.skip_keys and key not in skip_keys:
-                self._write_message("DEBUG**",("%s: %s" %(key, item)))
+        if self.debug_flag:
+            self._write_message("DEBUG**",codeClass)
+            skip_keys = ['skip_keys', 'debug', 'verbose']
+            for key, item in sorted(vars(codeClass).items()):
+                if key not in codeClass.skip_keys and key not in skip_keys:
+                    self._write_message("DEBUG**", f"{key}: {item}")
 
 
 
@@ -113,7 +113,7 @@ class loggingManager():
         if not self.report_started:
             self.report_started = 1
             self.write_report_header()
-        test_status = "[ %s ]" %(test_status)
+        test_status = f"[ {test_status} ]"
         msg = self.report_fmt.format( test_name, test_status
                                     , execution_time)
         self._write_message("", msg)
@@ -151,12 +151,7 @@ class loggingManager():
         result = result_map[retcode]
         with open(self.subunit_file,'a') as subunit_outfile:
             subunit_outfile.write(time.strftime("time: %Y-%m-%d-%H:%M:%SZ\n"))
-            if output:
-                output_string = " [\n%s]\n" %(output)
-            else:
-                output_string = "\n" # we just want a newline if nothing here 
-            subunit_outfile.write("%s: %s%s" %( result
-                                              , test_name
-                                              , output_string))
+            output_string = " [\n%s]\n" %(output) if output else "\n"
+            subunit_outfile.write(f"{result}: {test_name}{output_string}")
             
         
