@@ -48,21 +48,21 @@ class basicTest(mysqlBaseTestCase):
                 shutil.rmtree(del_path)
 
     def create_test_table(self, table_name, server):
-        queries = ["DROP TABLE IF EXISTS %s" %(table_name)
-                  ,("CREATE TABLE %s "
-                    "(`a` int(11) DEFAULT NULL, "
-                    "`number` int(11) DEFAULT NULL) "
-                    " ENGINE=InnoDB DEFAULT CHARSET=latin1"
-                    %(table_name)
-                   )
-                  ]
+        queries = [
+            f"DROP TABLE IF EXISTS {table_name}",
+            "CREATE TABLE %s "
+            "(`a` int(11) DEFAULT NULL, "
+            "`number` int(11) DEFAULT NULL) "
+            " ENGINE=InnoDB DEFAULT CHARSET=latin1" % (table_name),
+        ]
         retcode, result = self.execute_queries(queries, server)
         self.assertEqual(retcode, 0, msg = result) 
 
     def load_table(self, table_name, row_count, server):
-        queries = []
-        for i in range(row_count):
-            queries.append("INSERT INTO %s VALUES (%d, %d)" %(table_name,i, row_count))
+        queries = [
+            "INSERT INTO %s VALUES (%d, %d)" % (table_name, i, row_count)
+            for i in range(row_count)
+        ]
         retcode, result = self.execute_queries(queries, server)
         self.assertEqual(retcode, 0, msg=result)
 

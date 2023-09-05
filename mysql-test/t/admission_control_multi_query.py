@@ -49,8 +49,10 @@ def parse_args():
 
 def is_deadlock_error(exc):
     error_code = exc.args[0]
-    return (error_code == MySQLdb.constants.ER.LOCK_DEADLOCK or
-            error_code == MySQLdb.constants.ER.LOCK_WAIT_TIMEOUT)
+    return error_code in [
+        MySQLdb.constants.ER.LOCK_DEADLOCK,
+        MySQLdb.constants.ER.LOCK_WAIT_TIMEOUT,
+    ]
 
 def generate_load(args, worker_id):
     con = MySQLdb.connect(user=args.user,
@@ -75,7 +77,7 @@ def generate_load(args, worker_id):
                 cursor = con.cursor()
                 cursor.execute('begin;')
                 values = []
-                for j in range(3):
+                for _ in range(3):
                     val = random.randrange(1, 10000)
                     values.append(val)
                 values = sorted(values)
@@ -84,18 +86,16 @@ def generate_load(args, worker_id):
                     'update b=greatest(b+1, 0);' % (val)
                     cursor.execute(insert_sql)
                 cursor.execute("commit;")
-                cursor.close()
             elif op == 2:
                 print("WORKER %d: Executing GET_LOCK %d" % (worker_id, i))
                 cursor = con.cursor()
                 cursor.execute("select get_lock('testlock', -1)")
                 cursor.execute("select release_lock('testlock')")
-                cursor.close()
             else:
                 print("WORKER %d: Executing SLEEP %d" % (worker_id, i))
                 cursor = con.cursor()
                 cursor.execute("select sleep(0.1)")
-                cursor.close()
+            cursor.close()
         except (MySQLdb.OperationalError, MySQLdb.InternalError) as e:
             if not is_deadlock_error(e):
                 raise e
@@ -108,7 +108,7 @@ def run_reads(args):
                           host=args.host,
                           port=args.port,
                           db=args.database)
-    for i in range(int(NUM_TRANSACTIONS / 10)):
+    for _ in range(int(NUM_TRANSACTIONS / 10)):
         cursor = con.cursor()
         cursor.execute("select * from t1")
         cursor.execute("select repeat('X', @@max_allowed_packet)")
@@ -125,7 +125,7 @@ def run_admin_checks(args):
     cursor.execute("select @@global.max_running_queries")
     rows = cursor.fetchone()
     max_running_queries = int(rows[0])
-    for i in range(NUM_TRANSACTIONS):
+    for _ in range(NUM_TRANSACTIONS):
         cursor=con.cursor()
         cursor.execute("show status like '%admission%'")
         rows = cursor.fetchall()

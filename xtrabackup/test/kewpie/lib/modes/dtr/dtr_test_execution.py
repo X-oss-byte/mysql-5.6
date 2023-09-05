@@ -71,27 +71,24 @@ class testExecutor(test_execution.testExecutor):
 
         """
 
-        drizzletest_arguments = [ '--no-defaults'
-                                , '--silent'
-                                , '--tmpdir=%s' %(self.master_server.tmpdir)
-                                , '--logdir=%s' %(self.master_server.logdir)
-                                , '--port=%d' %(self.master_server.master_port)
-                                , '--database=test'
-                                , '--user=root'
-                                , '--password='
-                                #, '--testdir=%s' %(self.test_manager.testdir)
-                                , '--test-file=%s' %(self.current_testcase.testpath)
-                                , '--tail-lines=20'
-                                , '--timer-file=%s' %(self.master_server.timer_file)
-                                , '--result-file=%s' %(self.current_testcase.resultpath)
-                                ]
+        drizzletest_arguments = [
+            '--no-defaults',
+            '--silent',
+            f'--tmpdir={self.master_server.tmpdir}',
+            f'--logdir={self.master_server.logdir}',
+            '--port=%d' % (self.master_server.master_port),
+            '--database=test',
+            '--user=root',
+            '--password=',
+            f'--test-file={self.current_testcase.testpath}',
+            '--tail-lines=20',
+            f'--timer-file={self.master_server.timer_file}',
+            f'--result-file={self.current_testcase.resultpath}',
+        ]
         if self.record_flag:
             # We want to record a new result
             drizzletest_arguments.append('--record')
-        drizzletest_cmd = "%s %s %s" %( self.cmd_prefix
-                                      , self.master_server.code_tree.drizzletest
-                                      , " ".join(drizzletest_arguments))
-        return drizzletest_cmd
+        return f'{self.cmd_prefix} {self.master_server.code_tree.drizzletest} {" ".join(drizzletest_arguments)}'
 
     def execute_drizzletest(self, drizzletest_cmd):
         """ Execute the commandline and return the result.
@@ -100,26 +97,21 @@ class testExecutor(test_execution.testExecutor):
         """
         testcase_name = self.current_testcase.fullname
         self.time_manager.start(testcase_name,'test')
-        #retcode, output = self.system_manager.execute_cmd( drizzletest_cmd
-                                                 #         , must_pass = 0 )
         drizzletest_outfile = os.path.join(self.logdir,'drizzletest.out')
-        drizzletest_output = open(drizzletest_outfile,'w')
-        drizzletest_subproc = subprocess.Popen( drizzletest_cmd
-                                         , shell=True
-                                         , cwd=self.system_manager.testdir
-                                         , env=self.working_environment
-                                         , stdout = drizzletest_output
-                                         , stderr = subprocess.STDOUT
-                                         )
-        drizzletest_subproc.wait()
-        retcode = drizzletest_subproc.returncode     
-        execution_time = int(self.time_manager.stop(testcase_name)*1000) # millisec
+        with open(drizzletest_outfile,'w') as drizzletest_output:
+            drizzletest_subproc = subprocess.Popen( drizzletest_cmd
+                                             , shell=True
+                                             , cwd=self.system_manager.testdir
+                                             , env=self.working_environment
+                                             , stdout = drizzletest_output
+                                             , stderr = subprocess.STDOUT
+                                             )
+            drizzletest_subproc.wait()
+            retcode = drizzletest_subproc.returncode
+            execution_time = int(self.time_manager.stop(testcase_name)*1000) # millisec
 
-        drizzletest_output.close()
-        drizzletest_file = open(drizzletest_outfile,'r')
-        output = ''.join(drizzletest_file.readlines())
-        drizzletest_file.close()
-
+        with open(drizzletest_outfile,'r') as drizzletest_file:
+            output = ''.join(drizzletest_file.readlines())
         self.logging.debug("drizzletest_retcode: %d" %(retcode))
         self.current_test_retcode = retcode
         self.current_test_output = output
@@ -130,10 +122,8 @@ class testExecutor(test_execution.testExecutor):
         retcode = self.current_test_retcode
         if retcode == 0:
             return 'pass'
-        elif retcode == 62 or retcode == 15872:
+        elif retcode in [62, 15872]:
             return 'skipped'
-        elif retcode == 63 or retcode == 1:
-            return 'fail'
         else:
             return 'fail'
 

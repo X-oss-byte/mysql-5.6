@@ -19,7 +19,7 @@ def get_msg():
   blob_length = random.randint(1, 255)
   if random.randint(1, 2) == 1:
     # blob that cannot be compressed (well, compresses to 85% of original size)
-    return ''.join([random.choice(CHARS) for x in range(blob_length)])
+    return ''.join([random.choice(CHARS) for _ in range(blob_length)])
   else:
     # blob that can be compressed
     return random.choice(CHARS) * blob_length
@@ -47,12 +47,12 @@ class Inserter(threading.Thread):
       self.runme()
       print("Inserter OK.")
     except Exception as e:
-      print("caught (%s)" % e)
+      print(f"caught ({e})")
     finally:
       self.finish()
   def runme(self):
     cur = self.con.cursor()
-    for i in range(self.num_inserts):
+    for _ in range(self.num_inserts):
       idx = self.rand.randint(0, self.max_id)
       try:
         cur.execute(get_insert(idx))
@@ -83,7 +83,7 @@ class Deleter(threading.Thread):
       self.runme()
       print("Deleter OK.")
     except Exception as e:
-      print("caught (%s)" % e)
+      print(f"caught ({e})")
     finally:
       self.finish()
   def runme(self):

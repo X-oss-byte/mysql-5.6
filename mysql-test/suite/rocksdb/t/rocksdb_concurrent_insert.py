@@ -57,8 +57,7 @@ class Inserter(threading.Thread):
       self.con.commit()
     except Exception as e:
       self.exception = traceback.format_exc()
-      print("caught (%s)" % e)
-      pass
+      print(f"caught ({e})")
   def finish(self):
     self.finished = True
 
@@ -78,7 +77,7 @@ if __name__ == '__main__':
 
   worker_failed = False
   workers = []
-  for i in range(num_workers):
+  for _ in range(num_workers):
     inserter = Inserter(
       MySQLdb.connect(user=user, host=host, port=port, db=db), table_name,
       num_inserts)

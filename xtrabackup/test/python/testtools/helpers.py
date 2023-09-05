@@ -55,10 +55,8 @@ def try_imports(module_names, alternative=_RAISE_EXCEPTION):
     """
     module_names = list(module_names)
     for module_name in module_names:
-        module = try_import(module_name)
-        if module:
+        if module := try_import(module_name):
             return module
     if alternative is _RAISE_EXCEPTION:
-        raise ImportError(
-            "Could not import any of: %s" % ', '.join(module_names))
+        raise ImportError(f"Could not import any of: {', '.join(module_names)}")
     return alternative

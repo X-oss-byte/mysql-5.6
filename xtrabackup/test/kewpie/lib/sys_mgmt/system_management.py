@@ -115,11 +115,11 @@ class systemManager:
         # We store in a file so we know what
         # is ours
         self.uuid = self.get_uuid()
-        self.symlink_name = 'qp_workdir_%s_%s' %(self.cur_user, self.uuid)
+        self.symlink_name = f'qp_workdir_{self.cur_user}_{self.uuid}'
 
         # initialize our workdir
         self.process_workdir()
-        
+
         # Some ENV vars are system-standard
         # We describe and set them here and now
         # The format is name: (value, append, suffix)
@@ -148,7 +148,7 @@ class systemManager:
         # See if we need to do any further processing for special
         # options like valgrind and gdb
         self.handle_additional_reqs(variables)
-     
+
         self.logging.debug_class(self)
 
 
@@ -191,12 +191,11 @@ class systemManager:
         if os.path.exists(uuid_file_name):
             uuid_file = open(uuid_file_name,'r')
             uuid = uuid_file.readline().strip()
-            uuid_file.close()
         else:
             uuid = uuid4()
             uuid_file = open(uuid_file_name,'w')
             uuid_file.write(str(uuid))
-            uuid_file.close()
+        uuid_file.close()
         return uuid
 
     def process_workdir(self):
@@ -222,12 +221,12 @@ class systemManager:
         if self.no_shm:
             self.logging.info("Using --no-shm, will not link workdir to shm")
             self.create_dir(self.workdir, subdir=0)
-        elif self.shm_path == None:
+        elif self.shm_path is None:
             self.logging.info("Could not find shared memory path for use.  Not linking workdir to shm")
             self.create_dir(self.workdir, subdir=0)
         else:
             shm_workdir = self.create_dir(os.path.join(self.shm_path, self.symlink_name))
-            self.logging.info("Linking workdir %s to %s" %(self.workdir, shm_workdir))  
+            self.logging.info(f"Linking workdir {self.workdir} to {shm_workdir}")
             self.create_symlink(shm_workdir, self.workdir)
 
     def create_dir(self, dirname, subdir =1 ):
@@ -264,7 +263,7 @@ class systemManager:
             the dir must be empty to remove it
 
         """
-        self.logging.debug("Removing directory: %s" %(dirname))
+        self.logging.debug(f"Removing directory: {dirname}")
         if os.path.islink(dirname):
             os.remove(dirname)
         elif require_empty:
@@ -279,19 +278,19 @@ class systemManager:
 
         """
 
-        self.logging.debug("Copying directory: %s to %s" %(srcdir, tgtdir))
+        self.logging.debug(f"Copying directory: {srcdir} to {tgtdir}")
         if os.path.exists(tgtdir):
             if overwrite:
                 self.remove_dir(tgtdir)
             else:
-                self.logging.error("Cannot overwrite existing directory: %s" %(tgtdir))
+                self.logging.error(f"Cannot overwrite existing directory: {tgtdir}")
                 sys.exit(1)
         shutil.copytree(srcdir, tgtdir, symlinks=True)
 
     def create_symlink(self, source, link_name):
         """ We create a symlink to source named link_name """
 
-        self.logging.debug("Creating symlink from %s to %s" %(source, link_name))
+        self.logging.debug(f"Creating symlink from {source} to {link_name}")
         if os.path.exists(link_name) or os.path.islink(link_name):
             os.remove(link_name)
         return os.symlink(source, link_name)
@@ -323,11 +322,13 @@ class systemManager:
         """
 
         for test_path in paths:
-            self.logging.debug("Searching for path: %s" %(test_path))
+            self.logging.debug(f"Searching for path: {test_path}")
             if os.path.exists(test_path):
                 return test_path
         if required:
-            self.logging.error("Required file not found out of options: %s" %(" ,".join(paths)))
+            self.logging.error(
+                f'Required file not found out of options: {" ,".join(paths)}'
+            )
             sys.exit(1)
         else:
             return None
@@ -338,11 +339,11 @@ class systemManager:
 
         """
 
-        self.logging.debug("Executing command: %s" %(cmd))
+        self.logging.debug(f"Executing command: {cmd}")
         (retcode, output)= commands.getstatusoutput(cmd)
-        if not retcode == 0 and must_pass:
+        if retcode != 0 and must_pass:
             self.logging.error("Command %s failed with retcode %d" %(cmd, retcode))
-            self.logging.error("%s" %(output))
+            self.logging.error(f"{output}")
             sys.exit(1)
         return retcode, output
 
@@ -365,10 +366,7 @@ class systemManager:
 
         # do we need to setup for valgrind?
         if self.valgrind:
-            if self.helgrind:
-               valgrind_mode='helgrind'
-            else:
-                valgrind_mode='valgrind'
+            valgrind_mode = 'helgrind' if self.helgrind else 'valgrind'
             self.handle_valgrind_reqs(variables['valgrindarglist'], mode=valgrind_mode)
 
     def handle_gdb_reqs(self, server, server_args):
@@ -382,10 +380,8 @@ class systemManager:
 
         """
         extra_args = ''
-        gdb_term_cmd = "xterm -title %s.%s " %( server.owner
-                                              , server.name
-                                              )
-        gdb_file_name = "%s.gdbinit" %(server.name)
+        gdb_term_cmd = f"xterm -title {server.owner}.{server.name} "
+        gdb_file_name = f"{server.name}.gdbinit"
 
         if self.cur_os == 'Darwin': # Mac...ick ; P
             extra_args = [ "set env DYLD_INSERT_LIBRARIES /usr/lib/libgmalloc.dylib"
@@ -400,42 +396,31 @@ class systemManager:
         # produce our init file
         if extra_args:
             extra_args = "\n".join(extra_args)
-        gdb_file_contents = [ "set args %s" %(" ".join(server_args))
-                            , "%s" % (extra_args)
-                            , "set breakpoint pending on"
-	                          , "break drizzled::parse"
-	                          , "commands 1"
-                            , "disable 1"
-	                          , "end"
-                            , "set breakpoint pending off"
-	                          , "run"
-                            ]
+        gdb_file_contents = [
+            f'set args {" ".join(server_args)}',
+            f"{extra_args}",
+            "set breakpoint pending on",
+            "break drizzled::parse",
+            "commands 1",
+            "disable 1",
+            "end",
+            "set breakpoint pending off",
+            "run",
+        ]
         gdb_file_path = os.path.join(server.tmpdir, gdb_file_name)
-        gdb_init_file = open(gdb_file_path,'w')
-        gdb_init_file.write("\n".join(gdb_file_contents))
-        gdb_init_file.close()
-
-        # return our command line
-        if self.libtool:
-            libtool_string = "%s --mode=execute " %(self.libtool)
-        else:
-            libtool_string = ""
-
+        with open(gdb_file_path,'w') as gdb_init_file:
+            gdb_init_file.write("\n".join(gdb_file_contents))
         if self.manual_gdb:
             self.logging.info("To start gdb, open another terminal and enter:")
-            self.logging.info("%s/../libtool --mode=execute gdb -cd %s -x %s %s" %( server.code_tree.testdir
-                                                                                  , server.code_tree.testdir
-                                                                                  , gdb_file_path
-                                                                                  , server.server_path
-                                                                                  ) )
+            self.logging.info(
+                f"{server.code_tree.testdir}/../libtool --mode=execute gdb -cd {server.code_tree.testdir} -x {gdb_file_path} {server.server_path}"
+            )
             return None
 
         else:
-            return "%s -e %s gdb -x %s %s" %( gdb_term_cmd
-                                            , libtool_string
-                                            , gdb_file_path
-                                            , server.server_path
-                                            )
+                # return our command line
+            libtool_string = f"{self.libtool} --mode=execute " if self.libtool else ""
+            return f"{gdb_term_cmd} -e {libtool_string} gdb -x {gdb_file_path} {server.server_path}"
 
     def handle_valgrind_reqs(self, optional_args, mode='valgrind'):
         """ We do what voodoo we need to do to run valgrind """
@@ -447,15 +432,12 @@ class systemManager:
         if optional_args:
         # we override the defaults with user-specified options
             valgrind_args = optional_args
-        self.logging.info("Running valgrind with options: %s" %(" ".join(valgrind_args)))
+        self.logging.info(f'Running valgrind with options: {" ".join(valgrind_args)}')
 
         # set our environment variable
         self.env_manager.set_env_var('VALGRIND_RUN', '1', quiet=0)
 
-        # generate command prefix to call valgrind
-        cmd_prefix = ''
-        if self.libtool:
-            cmd_prefix = "%s --mode=execute valgrind " %(self.libtool)
+        cmd_prefix = f"{self.libtool} --mode=execute valgrind " if self.libtool else ''
         if mode == 'valgrind':
             # default mode
             args = [ "--tool=memcheck"
@@ -468,11 +450,11 @@ class systemManager:
                    ]
             # look for our suppressions file and add it to the mix if found
             if os.path.exists(self.valgrind_suppress_file):
-                args = args + [ "--suppressions=%s" %(suppress_file) ]
+                args += [f"--suppressions={suppress_file}"]
 
-            cmd_prefix = cmd_prefix + " ".join(args + valgrind_args)
+            cmd_prefix += " ".join(args + valgrind_args)
         self.cmd_prefix = cmd_prefix  
-        
+
         # add debug libraries to ld_library_path
         debug_path = '/usr/lib/debug'
         if os.path.exists(debug_path):
@@ -499,12 +481,9 @@ class systemManager:
             for found_file in files:
                 if found_file.endswith('.pid'):
                     file_path = os.path.join(root, found_file)
-                    pid_file = open(file_path,'r')
-                    pid = pid_file.readline().strip()
-                    pid_file.close()
-                    self.logging.info("Killing pid %s from %s" %( pid
-                                                                , file_path
-                                                                ))
+                    with open(file_path,'r') as pid_file:
+                        pid = pid_file.readline().strip()
+                    self.logging.info(f"Killing pid {pid} from {file_path}")
                     self.kill_pid(pid)
         if exit:
             sys.exit(0)

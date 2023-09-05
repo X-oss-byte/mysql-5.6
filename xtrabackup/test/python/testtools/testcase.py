@@ -290,7 +290,7 @@ class TestCase(unittest.TestCase):
         :param message: An optional message describing the error.
         """
         if message:
-            message = ': ' + message
+            message = f': {message}'
         self.assertTrue(
             expected is observed,
             '%r is not %r%s' % (expected, observed, message))
@@ -298,7 +298,7 @@ class TestCase(unittest.TestCase):
     def assertIsNot(self, expected, observed, message=''):
         """Assert that 'expected' is not 'observed'."""
         if message:
-            message = ': ' + message
+            message = f': {message}'
         self.assertTrue(
             expected is not observed,
             '%r is %r%s' % (expected, observed, message))
@@ -435,18 +435,14 @@ class TestCase(unittest.TestCase):
 
     @staticmethod
     def _report_skip(self, result, err):
-        if err.args:
-            reason = err.args[0]
-        else:
-            reason = "no reason given."
+        reason = err.args[0] if err.args else "no reason given."
         self._add_reason(reason)
         result.addSkip(self, details=self.getDetails())
 
     def _report_traceback(self, exc_info, tb_label='traceback'):
         id_gen = self._traceback_id_gens.setdefault(
             tb_label, itertools.count(0))
-        tb_id = advance_iterator(id_gen)
-        if tb_id:
+        if tb_id := advance_iterator(id_gen):
             tb_label = '%s-%d' % (tb_label, tb_id)
         self.addDetail(tb_label, content.TracebackContent(exc_info, self))
 
@@ -568,10 +564,7 @@ class PlaceHolder(object):
         internal = [self._test_id]
         if self._short_description is not None:
             internal.append(self._short_description)
-        return "<%s.%s(%s)>" % (
-            self.__class__.__module__,
-            self.__class__.__name__,
-            ", ".join(map(repr, internal)))
+        return f'<{self.__class__.__module__}.{self.__class__.__name__}({", ".join(map(repr, internal))})>'
 
     def __str__(self):
         return self.id()
@@ -619,10 +612,7 @@ class ErrorHolder(PlaceHolder):
         internal = [self._test_id, self._error]
         if self._short_description is not None:
             internal.append(self._short_description)
-        return "<%s.%s(%s)>" % (
-            self.__class__.__module__,
-            self.__class__.__name__,
-            ", ".join(map(repr, internal)))
+        return f'<{self.__class__.__module__}.{self.__class__.__name__}({", ".join(map(repr, internal))})>'
 
     def run(self, result=None):
         if result is None:
@@ -715,10 +705,9 @@ class ExpectedException:
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
-            raise AssertionError('%s not raised.' % self.exc_type.__name__)
+            raise AssertionError(f'{self.exc_type.__name__} not raised.')
         if exc_type != self.exc_type:
             return False
         if not re.match(self.value_re, str(exc_value)):
-            raise AssertionError('"%s" does not match "%s".' %
-                                 (str(exc_value), self.value_re))
+            raise AssertionError(f'"{str(exc_value)}" does not match "{self.value_re}".')
         return True

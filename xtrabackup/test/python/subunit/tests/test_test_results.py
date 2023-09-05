@@ -195,39 +195,40 @@ class TestTagCollapsingDecorator(TestCase):
     def test_tags_forwarded_outside_of_tests(self):
         result = ExtendedTestResult()
         tag_collapser = subunit.test_results.TagCollapsingDecorator(result)
-        tag_collapser.tags(set(['a', 'b']), set())
-        self.assertEquals(
-            [('tags', set(['a', 'b']), set([]))], result._events)
+        tag_collapser.tags({'a', 'b'}, set())
+        self.assertEquals([('tags', {'a', 'b'}, set([]))], result._events)
 
     def test_tags_collapsed_inside_of_tests(self):
         result = ExtendedTestResult()
         tag_collapser = subunit.test_results.TagCollapsingDecorator(result)
         test = subunit.RemotedTestCase('foo')
         tag_collapser.startTest(test)
-        tag_collapser.tags(set(['a']), set())
-        tag_collapser.tags(set(['b']), set(['a']))
-        tag_collapser.tags(set(['c']), set())
+        tag_collapser.tags({'a'}, set())
+        tag_collapser.tags({'b'}, {'a'})
+        tag_collapser.tags({'c'}, set())
         tag_collapser.stopTest(test)
         self.assertEquals(
-            [('startTest', test),
-             ('tags', set(['b', 'c']), set(['a'])),
-             ('stopTest', test)],
-            result._events)
+            [('startTest', test), ('tags', {'b', 'c'}, {'a'}), ('stopTest', test)],
+            result._events,
+        )
 
     def test_tags_collapsed_inside_of_tests_different_ordering(self):
         result = ExtendedTestResult()
         tag_collapser = subunit.test_results.TagCollapsingDecorator(result)
         test = subunit.RemotedTestCase('foo')
         tag_collapser.startTest(test)
-        tag_collapser.tags(set(), set(['a']))
-        tag_collapser.tags(set(['a', 'b']), set())
-        tag_collapser.tags(set(['c']), set())
+        tag_collapser.tags(set(), {'a'})
+        tag_collapser.tags({'a', 'b'}, set())
+        tag_collapser.tags({'c'}, set())
         tag_collapser.stopTest(test)
         self.assertEquals(
-            [('startTest', test),
-             ('tags', set(['a', 'b', 'c']), set()),
-             ('stopTest', test)],
-            result._events)
+            [
+                ('startTest', test),
+                ('tags', {'a', 'b', 'c'}, set()),
+                ('stopTest', test),
+            ],
+            result._events,
+        )
 
 
 class TestTimeCollapsingDecorator(TestCase):
@@ -250,7 +251,7 @@ class TestTimeCollapsingDecorator(TestCase):
         # are sent through.
         result = ExtendedTestResult()
         tag_collapser = subunit.test_results.TimeCollapsingDecorator(result)
-        times = [self.make_time() for i in range(5)]
+        times = [self.make_time() for _ in range(5)]
         for a_time in times:
             tag_collapser.time(a_time)
         tag_collapser.startTest(subunit.RemotedTestCase('foo'))
@@ -273,7 +274,7 @@ class TestTimeCollapsingDecorator(TestCase):
         result = ExtendedTestResult()
         tag_collapser = subunit.test_results.TimeCollapsingDecorator(result)
         a_time = self.make_time()
-        for i in range(5):
+        for _ in range(5):
             tag_collapser.time(a_time)
         tag_collapser.startTest(subunit.RemotedTestCase('foo'))
         self.assertEquals([('time', a_time)], result._events[:-1])
@@ -296,5 +297,4 @@ class TestTimeCollapsingDecorator(TestCase):
 
 def test_suite():
     loader = subunit.tests.TestUtil.TestLoader()
-    result = loader.loadTestsFromName(__name__)
-    return result
+    return loader.loadTestsFromName(__name__)

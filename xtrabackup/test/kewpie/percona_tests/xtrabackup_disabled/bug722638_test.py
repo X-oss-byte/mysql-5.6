@@ -30,7 +30,7 @@ from lib.util.mysql_methods import execute_cmd
 
 def skip_checks(system_manager):
     # test to ensure we have a debug build
-    cmd = "%s --help" %system_manager.xtrabackup_path 
+    cmd = f"{system_manager.xtrabackup_path} --help"
     output_path = os.path.join(system_manager.workdir, 'innobackupex.out')
     exec_path = system_manager.workdir
 

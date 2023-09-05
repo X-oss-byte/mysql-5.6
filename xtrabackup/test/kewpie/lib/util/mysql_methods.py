@@ -32,16 +32,15 @@ import subprocess
 import MySQLdb
 
 def execute_cmd(cmd, stdout_path, exec_path=None, get_output=False):
-    stdout_file = open(stdout_path,'w')
-    cmd_subproc = subprocess.Popen( cmd
-                                  , shell=True
-                                  , cwd=exec_path
-                                  , stdout = stdout_file
-                                  , stderr = subprocess.STDOUT
-                                  )
-    cmd_subproc.wait()
-    retcode = cmd_subproc.returncode
-    stdout_file.close()
+    with open(stdout_path,'w') as stdout_file:
+        cmd_subproc = subprocess.Popen( cmd
+                                      , shell=True
+                                      , cwd=exec_path
+                                      , stdout = stdout_file
+                                      , stderr = subprocess.STDOUT
+                                      )
+        cmd_subproc.wait()
+        retcode = cmd_subproc.returncode
     if get_output:
         data_file = open(stdout_path,'r')
         output = ''.join(data_file.readlines())
@@ -55,11 +54,9 @@ def get_tables(server, schema):
 
     """
     results = []
-    query = "SHOW TABLES IN %s" %(schema)
+    query = f"SHOW TABLES IN {schema}"
     retcode, table_set = execute_query(query, server)
-    for table_data in table_set:
-        table_name = table_data[0]
-        results.append(table_name)
+    results.extend(table_data[0] for table_data in table_set)
     return results
 
 def check_slaves_by_query( master_server
@@ -79,9 +76,7 @@ def check_slaves_by_query( master_server
 
     """
     comp_results = {}
-    if expected_result:
-        pass # don't bother getting it
-    else:
+    if not expected_result:
         # run against master for 'good' value
         retcode, expected_result = execute_query(query, master_server)
     for server in other_servers:
@@ -91,18 +86,13 @@ def check_slaves_by_query( master_server
         #                                                     , slave_result_
         #                                                       )
 
-        if not expected_result == slave_result:
-            comp_data = "%s: expected_result= %s | slave_result= %s" % ( server.name 
-                                                                       , expected_result 
-                                                                       , slave_result
-                                                                       )
+        if expected_result != slave_result:
+            comp_data = f"{server.name}: expected_result= {expected_result} | slave_result= {slave_result}"
             if comp_results.has_key(server.name):
                 comp_results[server.name].append(comp_data)
             else:
                 comp_results[server.name]=[comp_data]
-    if comp_results:
-        return comp_results
-    return None
+    return comp_results if comp_results else None
  
 
 def check_slaves_by_checksum( master_server
@@ -123,7 +113,7 @@ def check_slaves_by_checksum( master_server
     for server in other_servers:
         for schema in schemas:
             for table in get_tables(master_server, schema):
-                query = "CHECKSUM TABLE %s.%s" %(schema, table)
+                query = f"CHECKSUM TABLE {schema}.{table}"
                 retcode, master_checksum = execute_query(query, master_server)
                 retcode, slave_checksum = execute_query(query, server)
                 #print "%s: master_checksum= %s | slave_checksum= %s" % ( table
@@ -131,18 +121,13 @@ def check_slaves_by_checksum( master_server
                 #                                                       , slave_checksum
                 #                                                       )
 
-                if not master_checksum == slave_checksum:
-                    comp_data = "%s: master_checksum= %s | slave_checksum= %s" % ( table
-                                                                                 , master_checksum
-                                                                                 , slave_checksum
-                                                                                 )
+                if master_checksum != slave_checksum:
+                    comp_data = f"{table}: master_checksum= {master_checksum} | slave_checksum= {slave_checksum}"
                     if comp_results.has_key(server.name):
                         comp_results[server.name].append(comp_data)
                     else:
                         comp_results[server.name]=[comp_data]
-    if comp_results:
-        return comp_results
-    return None 
+    return comp_results if comp_results else None 
 
 
 
@@ -177,34 +162,25 @@ def take_mysqldump( server
 
 def diff_dumpfiles(orig_file_path, new_file_path):
     """ diff two dumpfiles useful for comparing servers """ 
-    orig_file = open(orig_file_path,'r')
-    restored_file = open(new_file_path,'r')
-    orig_file_data = []
-    rest_file_data = []
-    orig_file_data= filter_data(orig_file.readlines(),'Dump completed')
-    rest_file_data= filter_data(restored_file.readlines(),'Dump completed') 
-    
-    server_diff = difflib.unified_diff( orig_file_data
-                                      , rest_file_data
-                                      , fromfile=orig_file_path
-                                      , tofile=new_file_path
-                                      )
-    diff_output = []
-    for line in server_diff:
-        diff_output.append(line)
-    output = '\n'.join(diff_output)
-    orig_file.close()
+    with open(orig_file_path,'r') as orig_file:
+        restored_file = open(new_file_path,'r')
+        orig_file_data = []
+        rest_file_data = []
+        orig_file_data= filter_data(orig_file.readlines(),'Dump completed')
+        rest_file_data= filter_data(restored_file.readlines(),'Dump completed') 
+
+        server_diff = difflib.unified_diff( orig_file_data
+                                          , rest_file_data
+                                          , fromfile=orig_file_path
+                                          , tofile=new_file_path
+                                          )
+        diff_output = list(server_diff)
+        output = '\n'.join(diff_output)
     restored_file.close()
-    return (diff_output==[]), output
+    return not diff_output, output
 
 def filter_data(input_data, filter_text ):
-    return_data = []
-    for line in input_data:
-        if filter_text in line.strip():
-            pass
-        else:
-            return_data.append(line)
-    return return_data
+    return [line for line in input_data if filter_text not in line.strip()]
 
 def execute_query( query
                  , server

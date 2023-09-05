@@ -35,7 +35,7 @@ def handle_mode(variables, system_manager):
     """
 
     test_mode = variables['mode'].strip()
-    system_manager.logging.info("Using testing mode: %s" %test_mode)
+    system_manager.logging.info(f"Using testing mode: {test_mode}")
 
     if test_mode == 'cleanup':
         # cleanup mode - we try to kill any servers whose pid's we detect
@@ -52,14 +52,14 @@ def handle_mode(variables, system_manager):
                           , 'native'
                           ]
         if test_mode not in supported_modes:
-            system_manager.logging.error("invalid mode argument: %s" %test_mode)
+            system_manager.logging.error(f"invalid mode argument: {test_mode}")
             sys.exit(1)
-        
-        mgmt_module = "lib.modes.%s.%s_test_management" %(test_mode, test_mode)
+
+        mgmt_module = f"lib.modes.{test_mode}.{test_mode}_test_management"
         tmp = __import__(mgmt_module, globals(), locals(), ['testManager'], -1)
         testManager = tmp.testManager
 
-        exec_module = "%s.%s_test_execution" %(test_mode, test_mode)
+        exec_module = f"{test_mode}.{test_mode}_test_execution"
         tmp = __import__(exec_module, globals(), locals(), ['testExecutor'], -1)
         testExecutor = tmp.testExecutor        
 

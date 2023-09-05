@@ -36,17 +36,18 @@ backup_path = None
 
 class basicTest(mysqlBaseTestCase):
     def mysqladmin_set_pw(self, server, current_pass, new_pass):
-        cmd = [ server.mysqladmin
-              , "--protocol=tcp"
-              , "--user=root"
-              , "--port=%d" %server.master_port
-              , "password"
-              , "'%s'" %new_pass
-              ]
+        cmd = [
+            server.mysqladmin,
+            "--protocol=tcp",
+            "--user=root",
+            "--port=%d" % server.master_port,
+            "password",
+            f"'{new_pass}'",
+        ]
         if current_pass:
-            cmd.append("-p'%s'" %current_pass)
+            cmd.append(f"-p'{current_pass}'")
         cmd = " ".join(cmd)
-        server.logging.test_debug("mysqladmin cmd: %s" %cmd)
+        server.logging.test_debug(f"mysqladmin cmd: {cmd}")
         admin_output_file = os.path.join(server.vardir,'mysqladmin.out')
         retcode, output = self.execute_cmd(cmd,admin_output_file, get_output=True)
         self.assertEqual(retcode,0,output)

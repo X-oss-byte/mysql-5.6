@@ -56,30 +56,34 @@ def get_defaults(qp_rootdir, project_name):
                }
 
     if project_name == 'percona-xtradb-cluster':
-        defaults.update( { 'basedir': branch_root
-                         , 'clientbindir': os.path.join(branch_root,'/client')
-                         , 'server_type':'galera'
-                         , 'noshm':True
-                         , 'suitepaths': [ os.path.join(qp_rootdir,'percona_tests/') ]
-                         , 'suitelist' : ['cluster_basic','cluster_randgen']
-                         , 'wsrep_provider_path':'/usr/lib/galera/libgalera_smm.so'
-                         })
+        defaults |= {
+            'basedir': branch_root,
+            'clientbindir': os.path.join(branch_root, '/client'),
+            'server_type': 'galera',
+            'noshm': True,
+            'suitepaths': [os.path.join(qp_rootdir, 'percona_tests/')],
+            'suitelist': ['cluster_basic', 'cluster_randgen'],
+            'wsrep_provider_path': '/usr/lib/galera/libgalera_smm.so',
+        }
 
 
     if project_name == 'xtrabackup':
         # Xtrabackup tree default values
         branch_root = os.path.dirname(branch_root)
-        defaults.update( { 'basedir': os.path.join(branch_root,'test/server')
-                         , 'clientbindir': os.path.join(branch_root,'test/server/client')
-                         , 'server_type':'mysql'
-                         , 'noshm':True
-                         , 'valgrind_suppression':os.path.join(qp_rootdir,'valgrind.supp')
-                         , 'suitepaths': [ os.path.join(qp_rootdir,'percona_tests') ] 
-                         , 'suitelist' : ['xtrabackup_main']
-                         , 'subunit_file': os.path.join(branch_root,'test/test_results.subunit')
-                         , 'xtrabackuppath': find_xtrabackup_path(branch_root) 
-                         , 'innobackupexpath': os.path.join(branch_root,'innobackupex')
-                         })
+        defaults |= {
+            'basedir': os.path.join(branch_root, 'test/server'),
+            'clientbindir': os.path.join(branch_root, 'test/server/client'),
+            'server_type': 'mysql',
+            'noshm': True,
+            'valgrind_suppression': os.path.join(qp_rootdir, 'valgrind.supp'),
+            'suitepaths': [os.path.join(qp_rootdir, 'percona_tests')],
+            'suitelist': ['xtrabackup_main'],
+            'subunit_file': os.path.join(
+                branch_root, 'test/test_results.subunit'
+            ),
+            'xtrabackuppath': find_xtrabackup_path(branch_root),
+            'innobackupexpath': os.path.join(branch_root, 'innobackupex'),
+        }
     return defaults
 
 def find_xtrabackup_path(branch_root):

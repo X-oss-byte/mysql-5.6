@@ -111,10 +111,7 @@ class TestResult(unittest.TestResult):
         """
         if reason is None:
             reason = details.get('reason')
-            if reason is None:
-                reason = 'No reason given'
-            else:
-                reason = ''.join(reason.iter_text())
+            reason = 'No reason given' if reason is None else ''.join(reason.iter_text())
         skip_list = self.skip_reasons.setdefault(reason, [])
         skip_list.append(test)
 
@@ -167,10 +164,7 @@ class TestResult(unittest.TestResult):
         datetime.now(), otherwise its the last supplied datestamp given to the
         time() method.
         """
-        if self.__now is None:
-            return datetime.datetime.now(utc)
-        else:
-            return self.__now
+        return datetime.datetime.now(utc) if self.__now is None else self.__now
 
     def startTestRun(self):
         """Called before a test run starts.
@@ -299,10 +293,7 @@ class TextTestResult(TestResult):
         self.stream.write("Tests running...\n")
 
     def stopTestRun(self):
-        if self.testsRun != 1:
-            plural = 's'
-        else:
-            plural = ''
+        plural = 's' if self.testsRun != 1 else ''
         stop = self._now()
         self._show_list('ERROR', self.errors)
         self._show_list('FAIL', self.failures)
@@ -317,10 +308,23 @@ class TextTestResult(TestResult):
             self.stream.write("OK\n")
         else:
             self.stream.write("FAILED (")
-            details = []
-            details.append("failures=%d" % (
-                sum(map(len, (
-                    self.failures, self.errors, self.unexpectedSuccesses)))))
+            details = [
+                (
+                    "failures=%d"
+                    % (
+                        sum(
+                            map(
+                                len,
+                                (
+                                    self.failures,
+                                    self.errors,
+                                    self.unexpectedSuccesses,
+                                ),
+                            )
+                        )
+                    )
+                )
+            ]
             self.stream.write(", ".join(details))
             self.stream.write(")\n")
         super(TextTestResult, self).stopTestRun()
@@ -515,8 +519,7 @@ class ExtendedToOriginalDecorator(object):
         if details is not None:
             param_count += 1
         if param_count != 1:
-            raise ValueError("Must pass only one of err '%s' and details '%s"
-                % (err, details))
+            raise ValueError(f"Must pass only one of err '{err}' and details '{details}")
 
     def _details_to_exc_info(self, details):
         """Convert a details dict to an exc_info tuple."""
@@ -612,8 +615,7 @@ def _details_to_str(details):
         if content.content_type.type != 'text':
             chars.append('Binary content: %s\n' % key)
             continue
-        chars.append('Text attachment: %s\n' % key)
-        chars.append('------------\n')
+        chars.extend(('Text attachment: %s\n' % key, '------------\n'))
         chars.extend(content.iter_text())
         if not chars[-1].endswith('\n'):
             chars.append('\n')

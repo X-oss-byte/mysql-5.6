@@ -6,7 +6,6 @@ def get_doublewrite(f):
   doublewrite = page[TRX_SYS_DOUBLEWRITE:]
   if mach_read_from_4(doublewrite[TRX_SYS_DOUBLEWRITE_MAGIC:]) != TRX_SYS_DOUBLEWRITE_MAGIC_N:
     raise Exception('Doublewrite buffer is not created on the ibd file. Something is wrong.')
-    exit(1)
   return doublewrite
 
 def mach_read_from_4(b):
@@ -26,14 +25,14 @@ def mach_write_to_2(f, val):
           val &0xff]))
 
 def get_ibd_map(data_dir):
-  arr = glob.glob('%s/*/*.ibd' % data_dir)
+  arr = glob.glob(f'{data_dir}/*/*.ibd')
   m = {}
   for path in arr:
     with open(path, 'rb') as f:
       space_id = mach_read_from_4(
         f.read(4096)[FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID:])
     m[space_id] = path
-  m[0] = '%s/ibdata1' % data_dir
+  m[0] = f'{data_dir}/ibdata1'
   return m
 
 def corrupt_page_no(ibd_map, space_id, page_no):
@@ -84,7 +83,7 @@ def write_page_to_dblwr(ibd_map, space_id, page_no, page, innodb_doublewrite):
     if mach_read_from_2(page_type_raw) == FIL_PAGE_TYPE_DBLWR_HEADER:
       # If we're reading a header page, we should be testing reduced
       # doublewrite mode.
-      if not innodb_doublewrite == 2:
+      if innodb_doublewrite != 2:
         raise WrongDblwrModeError('Found header in full mode.')
 
       # Relative seek to the page data.
@@ -104,7 +103,7 @@ def write_page_to_dblwr(ibd_map, space_id, page_no, page, innodb_doublewrite):
     else:
       # If we're not reading a header page, we should be testing full
       # doublewrite mode.
-      if not innodb_doublewrite == 1:
+      if innodb_doublewrite != 1:
         raise WrongDblwrModeError('Missing header in reduced mode.')
 
       # Just write the passed in page to the first page of the first block.
@@ -125,12 +124,11 @@ def corrupt_page(ibd_map, space_id, innodb_doublewrite):
     return page_no, page
 
 def uncorrupt_page(space_id, page_no, page, ibd_map):
-    f = open(ibd_map[space_id], 'r+b')
+  with open(ibd_map[space_id], 'r+b') as f:
     f.seek(UNIV_PAGE_SIZE * page_no)
     f.write(page)
     f.flush()
     os.fsync(f.fileno())
-    f.close()
 
 class Command(object):
   def __init__(self, cmd, timeout):
@@ -152,7 +150,6 @@ class Command(object):
 def main():
   if len(sys.argv) < 5:
     raise Exception('Incorrect number of arguments.')
-    exit(1)
   data_dir = sys.argv[1]
   global BUF_DBLWR_HEADER_SIZE
   global UNIV_PAGE_SIZE
@@ -185,19 +182,13 @@ def main():
   FIL_PAGE_LSN = 16
   FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID = 34
   FIL_PAGE_SPACE_OR_CHKSUM = 0
-  DBLWR_FAIL_MESSAGE = "InnoDB: Cannot recover it from the doublewrite buffer because it was written in reduced-doublewrite mode.\n"
-  DBLWR_FAIL0_MESSAGE = "InnoDB: Doublewrite does not have page_no=0 of space: "
-  DBLWR_SUCCESS_MESSAGE = "InnoDB: Trying to recover it from the doublewrite buffer.\n"
-  DBLWR_SUCCESS0_MESSAGE = "InnoDB: Restoring page 0 of tablespace "
-
   space_id = int(sys.argv[3])
   innodb_doublewrite = int(sys.argv[4])
-  if innodb_doublewrite != 1 and innodb_doublewrite != 2:
+  if innodb_doublewrite not in [1, 2]:
     raise Exception("innodb_doublewrite must be 1 or 2 for this test.")
-    exit(1)
   log_file = '%s/innodb_corrupt_doublewrite-%d.log'  % (os.environ['MYSQL_TMP_DIR'], innodb_doublewrite)
   mysqld_cmd = os.environ['MYSQLD_CMD'].replace('--core-file', '')
-  mysqld_cmd += ' --log_error=%s'  % log_file
+  mysqld_cmd += f' --log_error={log_file}'
 
   ibd_map = get_ibd_map(data_dir)
   page_no, page = corrupt_page(ibd_map, space_id, innodb_doublewrite)
@@ -206,35 +197,35 @@ def main():
   # reduced-doublewrite mode was used.
   cmd = Command(mysqld_cmd, 30)
   ret = cmd.run()
+  contents = open(log_file).read()
   #print("cmd returned ", ret)
   if innodb_doublewrite == 1:
-    contents = open(log_file).read()
     if ret is not None:
       print(contents)
       raise Exception('MySQL failed to recover in full doublewrite mode.')
-      exit(1)
+    DBLWR_SUCCESS_MESSAGE = "InnoDB: Trying to recover it from the doublewrite buffer.\n"
     #Check here that the data page was indeed restored from the doublewrite buffer
     ind = contents.find(DBLWR_SUCCESS_MESSAGE)
     if ind == -1:
+      DBLWR_SUCCESS0_MESSAGE = "InnoDB: Restoring page 0 of tablespace "
+
       ind = contents.find(DBLWR_SUCCESS0_MESSAGE)
-      if ind == -1:
-        print(contents)
-        raise Exception('Doublewrite buffer was not used even though the following page was corrupt space_id=%d page_no=%d (doublewrite=1)'  % (space_id, page_no))
-        exit(1)
+    if ind == -1:
+      print(contents)
+      raise Exception('Doublewrite buffer was not used even though the following page was corrupt space_id=%d page_no=%d (doublewrite=1)'  % (space_id, page_no))
     print(DBLWR_SUCCESS_MESSAGE)
-  if innodb_doublewrite == 2:
-    contents = open(log_file).read()
+  else:
     if ret is None:
       print(contents)
       raise Exception('MySQL did not fail to recover even though reduced durability was used, and the following page was corrupt space_id=%d page_no=%d' % (space_id, page_no))
-      exit(1)
+    DBLWR_FAIL_MESSAGE = "InnoDB: Cannot recover it from the doublewrite buffer because it was written in reduced-doublewrite mode.\n"
     ind = contents.find(DBLWR_FAIL_MESSAGE)
     if ind == -1:
+      DBLWR_FAIL0_MESSAGE = "InnoDB: Doublewrite does not have page_no=0 of space: "
       ind = contents.find(DBLWR_FAIL0_MESSAGE)
-      if ind == -1:
-        print(contents)
-        raise Exception('Doublewrite did not fail to recover as expected on space_id=%d page_no=%d (doublewrite=2)'  % (space_id, page_no))
-        exit(1)
+    if ind == -1:
+      print(contents)
+      raise Exception('Doublewrite did not fail to recover as expected on space_id=%d page_no=%d (doublewrite=2)'  % (space_id, page_no))
     print(DBLWR_FAIL_MESSAGE)
     # undo the change to the page.
     uncorrupt_page(space_id, page_no, page, ibd_map)

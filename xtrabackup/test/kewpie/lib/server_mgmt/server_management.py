@@ -163,15 +163,16 @@ class serverManager:
         elif server_type == 'galera':
             from lib.server_mgmt.galera import mysqlServer as server_type
 
-        new_server = server_type( server_name
-                                , self
-                                , code_tree
-                                , self.default_storage_engine
-                                , server_options
-                                , requester
-                                , test_executor
-                                , workdir )
-        return new_server
+        return server_type(
+            server_name,
+            self,
+            code_tree,
+            self.default_storage_engine,
+            server_options,
+            requester,
+            test_executor,
+            workdir,
+        )
 
     def start_servers(self, requester, expect_fail):
         """ Start all servers for the requester """
@@ -181,7 +182,7 @@ class serverManager:
             if server.status == 0:
                 bad_start = bad_start + server.start()
             else:
-                self.logging.debug("Server %s already running" %(server.name))
+                self.logging.debug(f"Server {server.name} already running")
         return bad_start
 
     def stop_servers(self, requester):
@@ -249,24 +250,17 @@ class serverManager:
 
         """
 
-        # A dictionary that holds various tricks
-        # we can do with our test servers
-        special_processing_reqs = {}
-        if server_requests:
-            # we have a direct dictionary in the testcase
-            # that asks for what we want and we use it
-            special_processing_reqs = server_requests
-
+        special_processing_reqs = server_requests if server_requests else {}
         current_servers = self.servers[requester]
 
-        for index,server in enumerate(current_servers):
+        for index, server in enumerate(current_servers):
             # We handle a reset in case we need it:
             if server.need_reset:
                 self.reset_server(server)
                 server.need_reset = False
 
             desired_server_options = server_requirements[index]
-            
+
             # do any special config processing - this can alter
             # how we view our servers
             if cnf_path:
@@ -276,10 +270,9 @@ class serverManager:
                                               , desired_server_options
                                               )
 
-            if self.compare_options( server.server_options
-                                   , desired_server_options):
-                pass 
-            else:
+            if not self.compare_options(
+                server.server_options, desired_server_options
+            ):
                 # We need to reset what is running and change the server
                 # options
                 desired_server_options = self.filter_server_options(desired_server_options)
@@ -419,7 +412,7 @@ class serverManager:
 
         current_count = self.has_servers(requester)
         if desired_count > current_count:
-            for i in range(desired_count - current_count):
+            for _ in range(desired_count - current_count):
                 # We pass an empty options list when allocating
                 # We'll update the options to what is needed elsewhere
                 self.allocate_server(requester, test_executor, [], workdir)
@@ -451,16 +444,16 @@ class serverManager:
 
     def update_server_options(self, server, server_options):
         """ Change the option_list a server has to use on startup """
-        self.logging.debug("Updating server: %s options" %(server.name))
-        self.logging.debug("FROM: %s" %(server.server_options))
-        self.logging.debug("TO: %s" %(server_options))
+        self.logging.debug(f"Updating server: {server.name} options")
+        self.logging.debug(f"FROM: {server.server_options}")
+        self.logging.debug(f"TO: {server_options}")
         server.set_server_options(server_options)
 
     def get_server_count(self):
         """ Find out how many servers we have out """
         server_count = 0
         for server_list in self.servers.values():
-            for server in server_list:
+            for _ in server_list:
                 server_count = server_count + 1
         return server_count
 
@@ -487,21 +480,17 @@ class serverManager:
             # this speeds up test execution, but we only want
             # it to happen for the servers' environments
 
-            environment_reqs.update({'LD_PRELOAD':self.libeatmydata_path})
+            environment_reqs['LD_PRELOAD'] = self.libeatmydata_path
 
         # handle ld_preloads
         ld_lib_paths = self.env_manager.join_env_var_values(server.code_tree.ld_lib_paths)
-        environment_reqs.update({'LD_LIBRARY_PATH' : self.env_manager.append_env_var( 'LD_LIBRARY_PATH'
-                                                                                    , ld_lib_paths
-                                                                                    , suffix = 0
-                                                                                    , quiet = 1
-                                                                                    )
-                                , 'DYLD_LIBRARY_PATH' : self.env_manager.append_env_var( 'DYLD_LIBRARY_PATH'
-                                                                                       , ld_lib_paths
-                                                                                       , suffix = 0
-                                                                                       , quiet = 1
-                                                                                       )
-
-                                 })
+        environment_reqs |= {
+            'LD_LIBRARY_PATH': self.env_manager.append_env_var(
+                'LD_LIBRARY_PATH', ld_lib_paths, suffix=0, quiet=1
+            ),
+            'DYLD_LIBRARY_PATH': self.env_manager.append_env_var(
+                'DYLD_LIBRARY_PATH', ld_lib_paths, suffix=0, quiet=1
+            ),
+        }
         self.env_manager.update_environment_vars(environment_reqs)
 

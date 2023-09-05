@@ -67,12 +67,7 @@ class ProgressModel(object):
         if not self._tasks:
             return 0
         task = self._tasks[-1]
-        if len(self._tasks) > 1:
-            # scale up the overall pos by the current task or preserve it if
-            # no current width is known.
-            offset = task[2] * (task[1] or 1)
-        else:
-            offset = 0
+        offset = task[2] * (task[1] or 1) if len(self._tasks) > 1 else 0
         return offset + task[0]
 
     def push(self):
@@ -97,10 +92,5 @@ class ProgressModel(object):
         if not self._tasks:
             return 0
         task = self._tasks[-1]
-        if len(self._tasks) > 1:
-            # scale up the overall width by the current task or preserve it if
-            # no current width is known.
-            return task[3] * (task[1] or 1)
-        else:
-            return task[1]
+        return task[3] * (task[1] or 1) if len(self._tasks) > 1 else task[1]
 

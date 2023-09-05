@@ -103,7 +103,7 @@ def roll_d100(p):
 
 def execute(cur, stmt):
   ROW_COUNT_ERROR = 18446744073709551615
-  logging.debug("Executing %s" % stmt)
+  logging.debug(f"Executing {stmt}")
   cur.execute(stmt)
   if cur.rowcount < 0 or cur.rowcount == ROW_COUNT_ERROR:
     raise MySQLdb.OperationalError(MySQLdb.constants.CR.CONNECTION_ERROR,
@@ -166,19 +166,19 @@ class WorkerThread(threading.Thread):
         self.start()
 
     def insert_table_id(self, table_id):
-        global LOCKED_TABLE_IDS
-        global LOCK
-        ret = False
-        LOCK.acquire()
+      global LOCKED_TABLE_IDS
+      global LOCK
+      ret = False
+      LOCK.acquire()
 
-        if table_id not in LOCKED_TABLE_IDS:
-            logging.debug("%d is added to locked table id set" % table_id)
-            LOCKED_TABLE_IDS.add(table_id)
-            ret = True
+      if table_id not in LOCKED_TABLE_IDS:
+          logging.debug("%d is added to locked table id set" % table_id)
+          LOCKED_TABLE_IDS.add(table_id)
+          ret = True
 
-        LOCK.release()
-        logging.debug("insert_table_id returns %s" % ret)
-        return ret
+      LOCK.release()
+      logging.debug(f"insert_table_id returns {ret}")
+      return ret
 
     def remove_table_id(self, table_id):
         global LOCKED_TABLE_IDS
@@ -194,326 +194,311 @@ class WorkerThread(threading.Thread):
         time.sleep(0.05)
 
     def insert_data_to_table(self, table_name):
-        stmt = ("INSERT INTO %s VALUES (1, 1)"
-            % table_name)
-        for value in range(2, 4):
-            stmt += ", (%d, %d)" % (value, value)
-        execute(self.cur, stmt)
+      stmt = f"INSERT INTO {table_name} VALUES (1, 1)"
+      for value in range(2, 4):
+          stmt += ", (%d, %d)" % (value, value)
+      execute(self.cur, stmt)
 
-        self.con.commit()
-        stmt = ("SET GLOBAL rocksdb_force_flush_memtable_now = true")
-        execute(self.cur, stmt)
+      self.con.commit()
+      stmt = ("SET GLOBAL rocksdb_force_flush_memtable_now = true")
+      execute(self.cur, stmt)
 
-        stmt = ("INSERT INTO %s VALUES (4, 4)"
-            % table_name)
-        for value in range(5, 7):
-            stmt += ", (%d, %d)" % (value, value)
-        execute(self.cur, stmt)
+      stmt = f"INSERT INTO {table_name} VALUES (4, 4)"
+      for value in range(5, 7):
+          stmt += ", (%d, %d)" % (value, value)
+      execute(self.cur, stmt)
 
-        self.con.commit()
-        stmt = ("SET GLOBAL rocksdb_force_flush_memtable_now = true")
-        execute(self.cur, stmt)
+      self.con.commit()
+      stmt = ("SET GLOBAL rocksdb_force_flush_memtable_now = true")
+      execute(self.cur, stmt)
 
     def handle_create_table(self):
-        # create table
-        # randomly choose a table that has not been created,
-        # randomly choose a cf, and create the table
-        logging.debug("handle create table")
-        stmt = ("SELECT table_id FROM tables "
-            "WHERE created = 0 ORDER BY RAND() LIMIT 1")
+      # create table
+      # randomly choose a table that has not been created,
+      # randomly choose a cf, and create the table
+      logging.debug("handle create table")
+      stmt = ("SELECT table_id FROM tables "
+          "WHERE created = 0 ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("create table doesn't find a suitable table")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      table_id = row[0]
+      stmt = ("SELECT cf_id FROM cfs "
+          "ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      row = self.cur.fetchone()
+      table_name = 'tbl%02d' % table_id
+      primary_cf_id = row[0]
+      primary_cf_name = 'cf-%02d' % primary_cf_id
+
+      try:
+        stmt = f"CREATE TABLE {table_name} (id1 int(5) unsigned NOT NULL,id2 int(5) unsigned NOT NULL,PRIMARY KEY (id1) COMMENT '{primary_cf_name}') ENGINE=ROCKSDB"
         execute(self.cur, stmt)
+      except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
+          self.rollback_and_sleep()
+          return
+      except Exception as e:
+        if not is_table_exists_error(e):
+          raise e
 
-        if self.cur.rowcount != 1:
-            logging.info("create table doesn't find a suitable table")
-            self.rollback_and_sleep()
-            return
+        self.rollback_and_sleep()
+        return
+      self.insert_data_to_table(table_name)
 
-        row = self.cur.fetchone()
-        table_id = row[0]
-        table_name = 'tbl%02d' % table_id
+      stmt = ("UPDATE tables "
+          "SET created = 1, primary_cf_id = %d, secondary_cf_id = NULL "
+          "WHERE table_id = %d" % (primary_cf_id, table_id))
+      execute(self.cur, stmt)
 
-        stmt = ("SELECT cf_id FROM cfs "
-            "ORDER BY RAND() LIMIT 1")
-        execute(self.cur, stmt)
+      stmt = ("UPDATE cfs "
+          "SET used = 1, ref_count = ref_count + 1 "
+          "WHERE cf_id = %d" % primary_cf_id)
+      execute(self.cur, stmt)
 
-        row = self.cur.fetchone()
-        primary_cf_id = row[0]
-        primary_cf_name = 'cf-%02d' % primary_cf_id
-
-        try:
-            stmt = ("CREATE TABLE %s ("
-                    "id1 int(5) unsigned NOT NULL,"
-                    "id2 int(5) unsigned NOT NULL,"
-                    "PRIMARY KEY (id1) COMMENT '%s'"
-                    ") ENGINE=ROCKSDB" % (table_name, primary_cf_name))
-            execute(self.cur, stmt)
-        except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
-            self.rollback_and_sleep()
-            return
-        except Exception as e:
-            if is_table_exists_error(e):
-                self.rollback_and_sleep()
-                return
-            else:
-                raise e
-
-        self.insert_data_to_table(table_name)
-
-        stmt = ("UPDATE tables "
-            "SET created = 1, primary_cf_id = %d, secondary_cf_id = NULL "
-            "WHERE table_id = %d" % (primary_cf_id, table_id))
-        execute(self.cur, stmt)
-
-        stmt = ("UPDATE cfs "
-            "SET used = 1, ref_count = ref_count + 1 "
-            "WHERE cf_id = %d" % primary_cf_id)
-        execute(self.cur, stmt)
-
-        self.con.commit()
-        logging.debug("create table done")
+      self.con.commit()
+      logging.debug("create table done")
 
     def handle_drop_table(self):
-        # drop table
-        # randomly choose a used table, and drop the table
-        logging.info("handle drop table")
+      # drop table
+      # randomly choose a used table, and drop the table
+      logging.info("handle drop table")
 
-        stmt = ("SELECT table_id, primary_cf_id, secondary_cf_id FROM tables "
-            "WHERE created = 1 ORDER BY RAND() LIMIT 1")
+      stmt = ("SELECT table_id, primary_cf_id, secondary_cf_id FROM tables "
+          "WHERE created = 1 ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("drop table doesn't find a suitable table")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      table_id = row[0]
+
+      if (not self.insert_table_id(table_id)):
+          logging.info("can't drop table because the table is locked")
+          self.rollback_and_sleep()
+          return
+
+      table_name = 'tbl%02d' % table_id
+      primary_cf_id = row[1]
+      secondary_cf_id = row[2]
+
+      try:
+        stmt = f"DROP TABLE {table_name}"
         execute(self.cur, stmt)
+      except Exception as e:
+        if not is_table_not_found_error(e):
+          raise e
 
-        if self.cur.rowcount != 1:
-            logging.info("drop table doesn't find a suitable table")
-            self.rollback_and_sleep()
-            return
+        self.rollback_and_sleep()
+        return
+      stmt = ("UPDATE tables "
+          "SET created = 0, primary_cf_id = NULL, secondary_cf_id = NULL "
+          "WHERE table_id = %d" % table_id)
+      execute(self.cur, stmt)
 
-        row = self.cur.fetchone()
-        table_id = row[0]
+      if primary_cf_id is not None:
+          stmt = ("UPDATE cfs "
+              "SET ref_count = ref_count - 1 "
+              "WHERE cf_id = %d" % primary_cf_id)
+          execute(self.cur, stmt)
 
-        if (not self.insert_table_id(table_id)):
-            logging.info("can't drop table because the table is locked")
-            self.rollback_and_sleep()
-            return
+      if secondary_cf_id is not None:
+          stmt = ("UPDATE cfs "
+              "SET ref_count = ref_count - 1 "
+              "WHERE cf_id = %d" % secondary_cf_id)
+          execute(self.cur, stmt)
 
-        table_name = 'tbl%02d' % table_id
-        primary_cf_id = row[1]
-        secondary_cf_id = row[2]
+      self.con.commit()
+      self.remove_table_id(table_id)
 
-        try:
-            stmt = ("DROP TABLE %s" % table_name)
-            execute(self.cur, stmt)
-        except Exception as e:
-            if is_table_not_found_error(e) :
-                self.rollback_and_sleep()
-                return
-            else:
-                raise e
-
-        stmt = ("UPDATE tables "
-            "SET created = 0, primary_cf_id = NULL, secondary_cf_id = NULL "
-            "WHERE table_id = %d" % table_id)
-        execute(self.cur, stmt)
-
-        if primary_cf_id is not None:
-            stmt = ("UPDATE cfs "
-                "SET ref_count = ref_count - 1 "
-                "WHERE cf_id = %d" % primary_cf_id)
-            execute(self.cur, stmt)
-
-        if secondary_cf_id is not None:
-            stmt = ("UPDATE cfs "
-                "SET ref_count = ref_count - 1 "
-                "WHERE cf_id = %d" % secondary_cf_id)
-            execute(self.cur, stmt)
-
-        self.con.commit()
-        self.remove_table_id(table_id)
-
-        logging.debug("drop table done")
+      logging.debug("drop table done")
 
     def handle_add_index(self):
-        # alter table add index
-        # randomly choose a created table without secondary index,
-        # add the secondary index
-        logging.info("handle add index")
+      # alter table add index
+      # randomly choose a created table without secondary index,
+      # add the secondary index
+      logging.info("handle add index")
 
-        stmt = ("SELECT table_id FROM tables "
-            "WHERE created = 1 and secondary_cf_id is NULL "
-            "ORDER BY RAND() LIMIT 1")
+      stmt = ("SELECT table_id FROM tables "
+          "WHERE created = 1 and secondary_cf_id is NULL "
+          "ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("add index doesn't find a suitable table")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      table_id = row[0]
+
+      if (not self.insert_table_id(table_id)):
+          logging.info("can't add index because the table is locked")
+          self.rollback_and_sleep()
+          return
+
+      stmt = ("SELECT cf_id FROM cfs "
+          "ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      row = self.cur.fetchone()
+      table_name = 'tbl%02d' % table_id
+      secondary_cf_id = row[0]
+      secondary_cf_name = 'cf-%02d' % secondary_cf_id
+
+      try:
+        stmt = f"ALTER TABLE {table_name} ADD INDEX secondary_key (id2) COMMENT '{secondary_cf_name}'"
         execute(self.cur, stmt)
+      except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
+          self.rollback_and_sleep()
+          return
+      except Exception as e:
+        if not is_no_such_table_error(e) and not is_dup_key_error(e):
+          raise e
 
-        if self.cur.rowcount != 1:
-            logging.info("add index doesn't find a suitable table")
-            self.rollback_and_sleep()
-            return
+        self.rollback_and_sleep()
+        return
+      stmt = ("UPDATE tables "
+          "SET secondary_cf_id = %d "
+          "WHERE table_id = %d" % (secondary_cf_id, table_id))
+      execute(self.cur, stmt)
 
-        row = self.cur.fetchone()
-        table_id = row[0]
+      stmt = ("UPDATE cfs "
+          "SET used = 1, ref_count = ref_count + 1 "
+          "WHERE cf_id = %d" % secondary_cf_id)
+      execute(self.cur, stmt)
 
-        if (not self.insert_table_id(table_id)):
-            logging.info("can't add index because the table is locked")
-            self.rollback_and_sleep()
-            return
-
-        table_name = 'tbl%02d' % table_id
-
-        stmt = ("SELECT cf_id FROM cfs "
-            "ORDER BY RAND() LIMIT 1")
-        execute(self.cur, stmt)
-
-        row = self.cur.fetchone()
-        secondary_cf_id = row[0]
-        secondary_cf_name = 'cf-%02d' % secondary_cf_id
-
-        try:
-            stmt = ("ALTER TABLE %s "
-                    "ADD INDEX secondary_key (id2) "
-                    "COMMENT '%s'" % (table_name, secondary_cf_name))
-            execute(self.cur, stmt)
-        except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
-            self.rollback_and_sleep()
-            return
-        except Exception as e:
-            if is_no_such_table_error(e) or is_dup_key_error(e) :
-                self.rollback_and_sleep()
-                return
-            else:
-                raise e
-
-        stmt = ("UPDATE tables "
-            "SET secondary_cf_id = %d "
-            "WHERE table_id = %d" % (secondary_cf_id, table_id))
-        execute(self.cur, stmt)
-
-        stmt = ("UPDATE cfs "
-            "SET used = 1, ref_count = ref_count + 1 "
-            "WHERE cf_id = %d" % secondary_cf_id)
-        execute(self.cur, stmt)
-
-        self.con.commit()
-        self.remove_table_id(table_id)
-        logging.debug("add index done")
+      self.con.commit()
+      self.remove_table_id(table_id)
+      logging.debug("add index done")
 
     def handle_drop_index(self):
-        # alter table drop index
-        # randomly choose a created table with secondary index
-        # , and drop the index
-        logging.info("handle drop index")
+      # alter table drop index
+      # randomly choose a created table with secondary index
+      # , and drop the index
+      logging.info("handle drop index")
 
-        stmt = ("SELECT table_id, secondary_cf_id FROM tables "
-            "WHERE created = 1 and secondary_cf_id is NOT NULL "
-            "ORDER BY RAND() LIMIT 1")
+      stmt = ("SELECT table_id, secondary_cf_id FROM tables "
+          "WHERE created = 1 and secondary_cf_id is NOT NULL "
+          "ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("drop index doesn't find a suitable table")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      table_id = row[0]
+
+      if (not self.insert_table_id(table_id)):
+          logging.info("can't drop index because the table is locked")
+          self.rollback_and_sleep()
+          return
+
+      secondary_cf_id = row[1]
+
+      table_name = 'tbl%02d' % table_id
+      try:
+        stmt = f"ALTER TABLE {table_name} DROP INDEX secondary_key"
         execute(self.cur, stmt)
+      except Exception as e:
+        if not is_no_such_table_error(e) and not is_cant_drop_key_error(e):
+          raise e
 
-        if self.cur.rowcount != 1:
-            logging.info("drop index doesn't find a suitable table")
-            self.rollback_and_sleep()
-            return
+        self.rollback_and_sleep()
+        return
+      stmt = ("UPDATE tables "
+          "SET secondary_cf_id = NULL "
+          "WHERE table_id = %d" % table_id)
+      execute(self.cur, stmt)
 
-        row = self.cur.fetchone()
-        table_id = row[0]
+      stmt = ("UPDATE cfs "
+          "SET ref_count = ref_count - 1 "
+          "WHERE cf_id = %d" % secondary_cf_id)
+      execute(self.cur, stmt)
 
-        if (not self.insert_table_id(table_id)):
-            logging.info("can't drop index because the table is locked")
-            self.rollback_and_sleep()
-            return
-
-        table_name = 'tbl%02d' % table_id
-        secondary_cf_id = row[1]
-
-        try:
-            stmt = ("ALTER TABLE %s "
-                    "DROP INDEX secondary_key" % table_name)
-            execute(self.cur, stmt)
-        except Exception as e:
-            if is_no_such_table_error(e) or is_cant_drop_key_error(e) :
-                self.rollback_and_sleep()
-                return
-            else:
-                raise e
-
-        stmt = ("UPDATE tables "
-            "SET secondary_cf_id = NULL "
-            "WHERE table_id = %d" % table_id)
-        execute(self.cur, stmt)
-
-        stmt = ("UPDATE cfs "
-            "SET ref_count = ref_count - 1 "
-            "WHERE cf_id = %d" % secondary_cf_id)
-        execute(self.cur, stmt)
-
-        self.con.commit()
-        self.remove_table_id(table_id)
-        logging.debug("drop index done")
+      self.con.commit()
+      self.remove_table_id(table_id)
+      logging.debug("drop index done")
 
     def handle_manual_compaction(self):
-        # manual compaction
-        # randomly choose a used cf
-        # and do manual compaction on the cf
-        logging.info("handle manual compaction")
+      # manual compaction
+      # randomly choose a used cf
+      # and do manual compaction on the cf
+      logging.info("handle manual compaction")
 
-        stmt = ("SELECT cf_id FROM cfs "
-             " WHERE used = 1 "
-             "ORDER BY RAND() LIMIT 1")
+      stmt = ("SELECT cf_id FROM cfs "
+           " WHERE used = 1 "
+           "ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("manual compaction doesn't find a suitable cf")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      cf_id = row[0]
+      cf_name = 'cf-%02d' % cf_id
+
+      try:
+        stmt = f"SET @@global.rocksdb_compact_cf = '{cf_name}'"
         execute(self.cur, stmt)
+      except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
+          self.rollback_and_sleep()
 
-        if self.cur.rowcount != 1:
-            logging.info("manual compaction doesn't find a suitable cf")
-            self.rollback_and_sleep()
-            return
-
-        row = self.cur.fetchone()
-        cf_id = row[0]
-        cf_name = 'cf-%02d' % cf_id
-
-        try:
-            stmt = ("SET @@global.rocksdb_compact_cf = '%s'" % cf_name)
-            execute(self.cur, stmt)
-        except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
-            self.rollback_and_sleep()
-
-        self.con.commit()
-        logging.debug("manual compaction done")
+      self.con.commit()
+      logging.debug("manual compaction done")
 
     def handle_drop_cf(self):
-        # drop cf
-        # randomly choose a used cf
-        # and try drop the cf
-        logging.info("handle drop cf")
+      # drop cf
+      # randomly choose a used cf
+      # and try drop the cf
+      logging.info("handle drop cf")
 
-        stmt = None
-        if roll_d100(90):
-            stmt = ("SELECT cf_id FROM cfs "
-                " WHERE used = 1 and ref_count = 0"
-                " ORDER BY RAND() LIMIT 1")
-        else:
-            stmt = ("SELECT cf_id FROM cfs "
-                " WHERE used = 1 and ref_count > 0"
-                " ORDER BY RAND() LIMIT 1")
+      stmt = None
+      if roll_d100(90):
+          stmt = ("SELECT cf_id FROM cfs "
+              " WHERE used = 1 and ref_count = 0"
+              " ORDER BY RAND() LIMIT 1")
+      else:
+          stmt = ("SELECT cf_id FROM cfs "
+              " WHERE used = 1 and ref_count > 0"
+              " ORDER BY RAND() LIMIT 1")
+      execute(self.cur, stmt)
+
+      if self.cur.rowcount != 1:
+          logging.info("drop cf doesn't find a suitable cf")
+          self.rollback_and_sleep()
+          return
+
+      row = self.cur.fetchone()
+      cf_id = row[0]
+      cf_name = 'cf-%02d' % cf_id
+
+      try:
+        stmt = f"SET @@global.rocksdb_delete_cf = '{cf_name}'"
         execute(self.cur, stmt)
+      except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
+          self.rollback_and_sleep()
+          return
 
-        if self.cur.rowcount != 1:
-            logging.info("drop cf doesn't find a suitable cf")
-            self.rollback_and_sleep()
-            return
+      stmt = ("UPDATE cfs "
+          "SET used = 0 "
+          "WHERE cf_id = %d" % cf_id)
+      execute(self.cur, stmt)
 
-        row = self.cur.fetchone()
-        cf_id = row[0]
-        cf_name = 'cf-%02d' % cf_id
-
-        try:
-            stmt = ("SET @@global.rocksdb_delete_cf = '%s'" % cf_name)
-            execute(self.cur, stmt)
-        except (MySQLdb.InterfaceError, MySQLdb.OperationalError) as e:
-            self.rollback_and_sleep()
-            return
-
-        stmt = ("UPDATE cfs "
-            "SET used = 0 "
-            "WHERE cf_id = %d" % cf_id)
-        execute(self.cur, stmt)
-
-        self.con.commit()
-        logging.debug("drop cf done")
+      self.con.commit()
+      logging.debug("drop cf done")
 
     def runme(self):
         global TEST_STOP
@@ -567,127 +552,120 @@ class WorkerThread(threading.Thread):
             logging.info("Total run time: %.2f s" % self.total_time)
             self.con.close()
 
-if  __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Drop cf stress')
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser(description='Drop cf stress')
 
-    parser.add_argument('-d, --db', dest='db', default='test',
-                        help="mysqld server database to test with")
+  parser.add_argument('-d, --db', dest='db', default='test',
+                      help="mysqld server database to test with")
 
-    parser.add_argument('-H, --host', dest='host', default='127.0.0.1',
-                        help="mysqld server host ip address")
+  parser.add_argument('-H, --host', dest='host', default='127.0.0.1',
+                      help="mysqld server host ip address")
 
-    parser.add_argument('-L, --log-file', dest='log_file', default=None,
-                        help="log file for output")
+  parser.add_argument('-L, --log-file', dest='log_file', default=None,
+                      help="log file for output")
 
-    parser.add_argument('-w, --num-workers', dest='num_workers', type=int,
-                        default=16,
-                        help="number of worker threads to test with")
+  parser.add_argument('-w, --num-workers', dest='num_workers', type=int,
+                      default=16,
+                      help="number of worker threads to test with")
 
-    parser.add_argument('-P, --port', dest='port', default=3307, type=int,
-                        help='mysqld server host port')
+  parser.add_argument('-P, --port', dest='port', default=3307, type=int,
+                      help='mysqld server host port')
 
-    parser.add_argument('-r, --num-requests', dest='num_requests', type=int,
-                        default=100000000,
-                        help="number of requests issued per worker thread")
+  parser.add_argument('-r, --num-requests', dest='num_requests', type=int,
+                      default=100000000,
+                      help="number of requests issued per worker thread")
 
-    parser.add_argument('-u, --user', dest='user', default='root',
-                        help="user to log into the mysql server")
+  parser.add_argument('-u, --user', dest='user', default='root',
+                      help="user to log into the mysql server")
 
-    parser.add_argument('-v, --verbose', dest='verbose', action='store_true',
-                        help="enable debug logging")
+  parser.add_argument('-v, --verbose', dest='verbose', action='store_true',
+                      help="enable debug logging")
 
-    parser.add_argument('--ct-weight', dest='create_table_weight', type=int,
-                        default=3,
-                        help="weight of create table command")
+  parser.add_argument('--ct-weight', dest='create_table_weight', type=int,
+                      default=3,
+                      help="weight of create table command")
 
-    parser.add_argument('--dt-weight', dest='drop_table_weight', type=int,
-                        default=3,
-                        help="weight of drop table command")
+  parser.add_argument('--dt-weight', dest='drop_table_weight', type=int,
+                      default=3,
+                      help="weight of drop table command")
 
-    parser.add_argument('--ai-weight', dest='add_index_weight', type=int,
-                        default=3,
-                        help="weight of add index command")
+  parser.add_argument('--ai-weight', dest='add_index_weight', type=int,
+                      default=3,
+                      help="weight of add index command")
 
-    parser.add_argument('--di-weight', dest='drop_index_weight', type=int,
-                        default=3,
-                        help="weight of drop index command")
+  parser.add_argument('--di-weight', dest='drop_index_weight', type=int,
+                      default=3,
+                      help="weight of drop index command")
 
-    parser.add_argument('--dc-weight', dest='drop_cf_weight', type=int,
-                        default=3,
-                        help="weight of drop cf command")
+  parser.add_argument('--dc-weight', dest='drop_cf_weight', type=int,
+                      default=3,
+                      help="weight of drop cf command")
 
-    parser.add_argument('--mc-weight', dest='manual_compaction_weight',
-                        type=int,
-                        default=1,
-                        help="weight of manual compaction command")
+  parser.add_argument('--mc-weight', dest='manual_compaction_weight',
+                      type=int,
+                      default=1,
+                      help="weight of manual compaction command")
 
-    OPTIONS = parser.parse_args()
+  OPTIONS = parser.parse_args()
 
-    if OPTIONS.verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
+  log_level = logging.DEBUG if OPTIONS.verbose else logging.INFO
+  logging.basicConfig(level=log_level,
+                  format='%(asctime)s %(threadName)s [%(levelname)s] '
+                         '%(message)s',
+                  datefmt='%Y-%m-%d %H:%M:%S',
+                  filename=OPTIONS.log_file)
 
-    logging.basicConfig(level=log_level,
-                    format='%(asctime)s %(threadName)s [%(levelname)s] '
-                           '%(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    filename=OPTIONS.log_file)
+  con = MySQLdb.connect(user=OPTIONS.user, host=OPTIONS.host,
+                         port=OPTIONS.port, db=OPTIONS.db)
 
-    con = MySQLdb.connect(user=OPTIONS.user, host=OPTIONS.host,
-                           port=OPTIONS.port, db=OPTIONS.db)
+  if not con:
+      raise Exception("Unable to connect to mysqld server")
 
-    if not con:
-        raise Exception("Unable to connect to mysqld server")
+  TOTAL_WEIGHT += OPTIONS.create_table_weight
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.create_table_weight
-    WEIGHTS.append(TOTAL_WEIGHT)
+  TOTAL_WEIGHT += OPTIONS.drop_table_weight;
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.drop_table_weight;
-    WEIGHTS.append(TOTAL_WEIGHT)
+  TOTAL_WEIGHT += OPTIONS.add_index_weight;
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.add_index_weight;
-    WEIGHTS.append(TOTAL_WEIGHT)
+  TOTAL_WEIGHT += OPTIONS.drop_index_weight;
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.drop_index_weight;
-    WEIGHTS.append(TOTAL_WEIGHT)
+  TOTAL_WEIGHT += OPTIONS.drop_cf_weight;
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.drop_cf_weight;
-    WEIGHTS.append(TOTAL_WEIGHT)
+  TOTAL_WEIGHT += OPTIONS.manual_compaction_weight;
+  WEIGHTS.append(TOTAL_WEIGHT)
 
-    TOTAL_WEIGHT += OPTIONS.manual_compaction_weight;
-    WEIGHTS.append(TOTAL_WEIGHT)
+  workers = [WorkerThread(i) for i in range(OPTIONS.num_workers)]
+  workers_failed = 0
+  workers_failed += wait_for_workers(workers)
+  if workers_failed > 0:
+      logging.error("Test detected %d failures, aborting" % workers_failed)
+      sys.exit(1)
 
-    workers = []
-    for i in range(OPTIONS.num_workers):
-        workers.append(WorkerThread(i))
+  cur = con.cursor()
+  stmt = ("SELECT table_name FROM information_schema.tables "
+      "WHERE table_name like 'tbl%'")
+  execute(cur, stmt)
 
-    workers_failed = 0
-    workers_failed += wait_for_workers(workers)
-    if workers_failed > 0:
-        logging.error("Test detected %d failures, aborting" % workers_failed)
-        sys.exit(1)
-
-    cur = con.cursor()
-    stmt = ("SELECT table_name FROM information_schema.tables "
-        "WHERE table_name like 'tbl%'")
+  for row in cur.fetchall():
+    table_name = row[0]
+    stmt = f"DROP TABLE {table_name}"
     execute(cur, stmt)
 
-    for row in cur.fetchall():
-        table_name = row[0]
-        stmt = ("DROP TABLE %s" % table_name)
-        execute(cur, stmt)
+  stmt = ("SELECT table_name FROM information_schema.tables "
+      "WHERE table_name like 'cf-%'")
+  execute(cur, stmt)
 
-    stmt = ("SELECT table_name FROM information_schema.tables "
-        "WHERE table_name like 'cf-%'")
+  for row in cur.fetchall():
+    table_name = row[0]
+    stmt = f"DROP TABLE {table_name}"
     execute(cur, stmt)
 
-    for row in cur.fetchall():
-        table_name = row[0]
-        stmt = ("DROP TABLE %s" % table_name)
-        execute(cur, stmt)
+  con.close()
 
-    con.close()
-
-    sys.exit(0)
+  sys.exit(0)
 

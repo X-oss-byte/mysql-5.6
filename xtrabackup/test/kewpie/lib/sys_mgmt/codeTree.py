@@ -46,9 +46,9 @@ class codeTree(object):
         self.basedir = self.system_manager.find_path(os.path.abspath(basedir))
 
     def debug_status(self):
-            self.logging.debug(self)
-            for key, item in sorted(vars(self).items()):
-                self.logging.debug("%s: %s" %(key, item))
+        self.logging.debug(self)
+        for key, item in sorted(vars(self).items()):
+            self.logging.debug(f"{key}: {item}")
 
 class drizzleTree(codeTree):
     """ What a Drizzle code tree should look like to the test-runner
@@ -132,13 +132,15 @@ class drizzleTree(codeTree):
                       ,'server_platform'
                       ,'server_comment']
         for key in report_keys:
-            self.logging.info("%s: %s" %(key, vars(self)[key]))
+            self.logging.info(f"{key}: {vars(self)[key]}")
         
 
 
     def process_server_version(self):
         """ Get the server version number from the found server executable """
-        (retcode, self.server_version_string) = self.system_manager.execute_cmd(("%s --no-defaults --version" %(self.drizzle_server)))
+        (retcode, self.server_version_string) = self.system_manager.execute_cmd(
+            f"{self.drizzle_server} --no-defaults --version"
+        )
         # This is a bit bobo, but we're doing it, so nyah
         # TODO fix this : )
         self.server_executable, data_string = [data_item.strip() for data_item in self.server_version_string.split('Ver ')]
@@ -155,20 +157,22 @@ class drizzleTree(codeTree):
   
         """
         ld_lib_paths = []
-        if self.source_dist:
-            ld_lib_paths = [ os.path.join(self.basedir,"libdrizzleclient/.libs/")
-                           #, os.path.join(self.basedir,"libdrizzle-2.0/libdrizzle.libs")
-                           , os.path.join(self.basedir,"libdrizzle/.libs")
-                           , os.path.join(self.basedir,"libdrizzle-2.0/libdrizzle/.libs")
-                           , os.path.join(self.basedir,"libdrizzle-1.0/libdrizzle/.libs")
-                           , os.path.join(self.basedir,"mysys/.libs/")
-                           , os.path.join(self.basedir,"mystrings/.libs/")
-                           , os.path.join(self.basedir,"drizzled/.libs/")
-			                     , "/usr/local/lib"
-                           ]
-        else:
-            ld_lib_paths = [ os.path.join(self.basedir,"lib")]
-        return ld_lib_paths
+        return (
+            [
+                os.path.join(self.basedir, "libdrizzleclient/.libs/")
+                # , os.path.join(self.basedir,"libdrizzle-2.0/libdrizzle.libs")
+                ,
+                os.path.join(self.basedir, "libdrizzle/.libs"),
+                os.path.join(self.basedir, "libdrizzle-2.0/libdrizzle/.libs"),
+                os.path.join(self.basedir, "libdrizzle-1.0/libdrizzle/.libs"),
+                os.path.join(self.basedir, "mysys/.libs/"),
+                os.path.join(self.basedir, "mystrings/.libs/"),
+                os.path.join(self.basedir, "drizzled/.libs/"),
+                "/usr/local/lib",
+            ]
+            if self.source_dist
+            else [os.path.join(self.basedir, "lib")]
+        )
 
 
 class mysqlTree(codeTree):
@@ -284,11 +288,13 @@ class mysqlTree(codeTree):
                       ,'server_platform'
                       ,'server_comment']
         for key in report_keys:
-            self.logging.info("%s: %s" %(key, vars(self)[key]))
+            self.logging.info(f"{key}: {vars(self)[key]}")
         
     def process_server_version(self):
         """ Get the server version number from the found server executable """
-        (retcode, self.server_version_string) = self.system_manager.execute_cmd(("%s --no-defaults --version" %(self.mysql_server)))
+        (retcode, self.server_version_string) = self.system_manager.execute_cmd(
+            f"{self.mysql_server} --no-defaults --version"
+        )
         # This is a bit bobo, but we're doing it, so nyah
         # TODO fix this : )
         self.server_executable, data_string = [data_item.strip() for data_item in self.server_version_string.split('Ver ')]
@@ -305,15 +311,18 @@ class mysqlTree(codeTree):
   
         """
         ld_lib_paths = []
-        if self.source_dist:
-            ld_lib_paths = [ os.path.join(self.basedir,"libmysql/.libs/")
-                           , os.path.join(self.basedir,"libmysql_r/.libs")
-                           , os.path.join(self.basedir,"zlib/.libs")
-                           ]
-        else:
-            ld_lib_paths = [ os.path.join(self.basedir,"lib")
-                           , os.path.join(self.basedir,"lib/mysql")]
-        return ld_lib_paths
+        return (
+            [
+                os.path.join(self.basedir, "libmysql/.libs/"),
+                os.path.join(self.basedir, "libmysql_r/.libs"),
+                os.path.join(self.basedir, "zlib/.libs"),
+            ]
+            if self.source_dist
+            else [
+                os.path.join(self.basedir, "lib"),
+                os.path.join(self.basedir, "lib/mysql"),
+            ]
+        )
 
     def generate_bootstrap(self):
         """ We do the voodoo that we need to in order to create the bootstrap
@@ -326,10 +335,10 @@ class mysqlTree(codeTree):
         # first we search various possible locations
         test_file = "mysql_system_tables.sql"
         for candidate_dir in [ "mysql"
-                         , "sql/share"
-                         , "share/mysql"
-			                   , "share"
-                         , "scripts"]:
+        , "sql/share"
+        , "share/mysql"
+        , "share"
+        , "scripts"]:
             candidate_path = os.path.join(self.basedir, candidate_dir, test_file)
             if os.path.exists(candidate_path):
                 bootstrap_file = open(self.bootstrap_path,'w')
@@ -340,23 +349,21 @@ class mysqlTree(codeTree):
                                 , 'fill_help_tables.sql' # fill help tables populated only w/ src dist(?)
                                 ]:
                     sql_file_path = os.path.join(self.basedir,candidate_dir,sql_file)
-                    sql_file_handle = open(sql_file_path,'r')
-                    for line in sql_file_handle.readlines():
-                        bootstrap_file.write(line)
-                    sql_file_handle.close()
+                    with open(sql_file_path,'r') as sql_file_handle:
+                        for line in sql_file_handle:
+                            bootstrap_file.write(line)
                 found_new_sql = True
                 break
         if not found_new_sql:
             # Install the system db's from init_db.sql
             # that is in early 5.1 and 5.0 versions of MySQL
             sql_file_path = os.path.join(self.basedir,'mysql-test/lib/init_db.sql')
-            self.logging.info("Attempting to use bootstrap file - %s" %(sql_file_path))
+            self.logging.info(f"Attempting to use bootstrap file - {sql_file_path}")
             try:
-                in_file = open(sql_file_path,'r')
-                bootstrap_file = open(self.bootstrap_path,'w')
-                for line in in_file.readlines():
-                    bootstrap_file.write(line)
-                in_file.close()
+                with open(sql_file_path,'r') as in_file:
+                    bootstrap_file = open(self.bootstrap_path,'w')
+                    for line in in_file:
+                        bootstrap_file.write(line)
             except IOError:
                 self.logging.error("Cannot find data for generating bootstrap file")
                 self.logging.error("Cannot proceed without this, system exiting...")
@@ -414,10 +421,10 @@ class galeraTree(mysqlTree):
         # first we search various possible locations
         test_file = "mysql_system_tables.sql"
         for candidate_dir in [ "mysql"
-                         , "sql/share"
-                         , "share/mysql"
-			                   , "share"
-                         , "scripts"]:
+        , "sql/share"
+        , "share/mysql"
+        , "share"
+        , "scripts"]:
             candidate_path = os.path.join(self.basedir, candidate_dir, test_file)
             if os.path.exists(candidate_path):
                 bootstrap_file = open(self.bootstrap_path,'w')
@@ -428,31 +435,29 @@ class galeraTree(mysqlTree):
                                 , 'fill_help_tables.sql' # fill help tables populated only w/ src dist(?)
                                 ]:
                     sql_file_path = os.path.join(self.basedir,candidate_dir,sql_file)
-                    sql_file_handle = open(sql_file_path,'r')
-                    should_write = True
-                    for line in sql_file_handle.readlines():
-                        if line.startswith("-- PERFORMANCE SCHEMA INSTALLATION"):
-                            # We skip performance schema for now to avoid issues
-                            # with the mysqldump sst method
-                            should_write = False
-                        if 'proxies_priv' in line and not should_write:
-                            should_write = True
-                        if should_write:
-                            bootstrap_file.write(line)
-                    sql_file_handle.close()
+                    with open(sql_file_path,'r') as sql_file_handle:
+                        should_write = True
+                        for line in sql_file_handle:
+                            if line.startswith("-- PERFORMANCE SCHEMA INSTALLATION"):
+                                # We skip performance schema for now to avoid issues
+                                # with the mysqldump sst method
+                                should_write = False
+                            if 'proxies_priv' in line and not should_write:
+                                should_write = True
+                            if should_write:
+                                bootstrap_file.write(line)
                 found_new_sql = True
                 break
         if not found_new_sql:
             # Install the system db's from init_db.sql
             # that is in early 5.1 and 5.0 versions of MySQL
             sql_file_path = os.path.join(self.basedir,'mysql-test/lib/init_db.sql')
-            self.logging.info("Attempting to use bootstrap file - %s" %(sql_file_path))
+            self.logging.info(f"Attempting to use bootstrap file - {sql_file_path}")
             try:
-                in_file = open(sql_file_path,'r')
-                bootstrap_file = open(self.bootstrap_path,'w')
-                for line in in_file.readlines():
-                    bootstrap_file.write(line)
-                in_file.close()
+                with open(sql_file_path,'r') as in_file:
+                    bootstrap_file = open(self.bootstrap_path,'w')
+                    for line in in_file:
+                        bootstrap_file.write(line)
             except IOError:
                 self.logging.error("Cannot find data for generating bootstrap file")
                 self.logging.error("Cannot proceed without this, system exiting...")

@@ -40,28 +40,24 @@ ENGINE=INNODB
 def fill_table(con, table_name, count, rng, log):
   cur = con.cursor()
 
-  if table_name in ['t3', 't4']:
-    max_len = 9000
-  else:
-    max_len = 250
-
-  for i in range(count):
+  max_len = 9000 if table_name in ['t3', 't4'] else 250
+  for _ in range(count):
     cur.execute("""
 INSERT INTO %s(id,msg) VALUES (NULL, LPAD(%d, %d, 'x'))
 """ % (table_name, rng.randint(1,100000), rng.randint(1, max_len)))
 
   print("inserted %d rows to %s" % (count, table_name), file=log)
-  cur.execute("select count(*) from %s" % table_name)
+  cur.execute(f"select count(*) from {table_name}")
   row = cur.fetchone()
   print("...then read %d rows of %d" % (row[0], count), file=log)
   cur.close()
 
 def create_table(con, table_name, log):
   assert table_name in table_ddl
-  print("creating %s with %s" % (table_name, table_ddl[table_name]), file=log)
+  print(f"creating {table_name} with {table_ddl[table_name]}", file=log)
   cur = con.cursor()
   cur.execute(table_ddl[table_name])
-  print("created %s" % table_name, file=log)
+  print(f"created {table_name}", file=log)
   cur.close()
 
 def create_tables(con, min_records, rng, log):
@@ -73,10 +69,10 @@ def drop_tables(con, log):
   for table_name in tables:
     try:
       cur = con.cursor()
-      cur.execute("drop table %s" % table_name)
+      cur.execute(f"drop table {table_name}")
       cur.close()
     except MySQLdb.Error as e:
-      print("drop_tables: mysql error for %s, %s" % (table_name, e), file=log)
+      print(f"drop_tables: mysql error for {table_name}, {e}", file=log)
 
 class Dropper(threading.Thread):
   global LG_TMP_DIR
@@ -87,7 +83,7 @@ class Dropper(threading.Thread):
     self.con = con
     self.min_records = min_records
     self.max_records = max_records
-    self.log = open('/%s/dropper.log' % LG_TMP_DIR, 'a')
+    self.log = open(f'/{LG_TMP_DIR}/dropper.log', 'a')
     self.rng = rng
     self.num_drops = 0
 
@@ -97,7 +93,7 @@ class Dropper(threading.Thread):
       print("dropper started", file=self.log)
       self.runme()
     except Exception as e:
-      print("caught (%s)" % e, file=self.log)
+      print(f"caught ({e})", file=self.log)
     finally:
       self.finish()
 
@@ -108,7 +104,7 @@ class Dropper(threading.Thread):
       try:
         for table_name in tables:
           cur = self.con.cursor()
-          stmt = "select count(*) from %s" % table_name
+          stmt = f"select count(*) from {table_name}"
           cur.execute(stmt)
           row = cur.fetchone()
           cur.close()
@@ -116,14 +112,14 @@ class Dropper(threading.Thread):
 
           if row[0] >= self.max_records:
             cur = self.con.cursor()
-            stmt = "drop table %s" % table_name
+            stmt = f"drop table {table_name}"
             cur.execute(stmt)
             cur.close()
-            print("dropped %s" % table_name, file=self.log)
+            print(f"dropped {table_name}", file=self.log)
 
             done = False
             loop = 0
-            stmt = "creating %s" % table_name
+            stmt = f"creating {table_name}"
             while not done and loop < 1000:
               try:
                 loop += 1
@@ -132,11 +128,11 @@ class Dropper(threading.Thread):
               except MySQLdb.Error as e:
                 print("mysql error for create %s, loop %d, %s" % (table_name, loop, e), file=self.log)
 
-            stmt = "filling %s" % table_name
+            stmt = f"filling {table_name}"
             fill_table(self.con, table_name, self.min_records, self.rng, self.log)
             self.num_drops += 1
       except MySQLdb.Error as e:
-        print("mysql error for stmt(%s) %s" % (stmt, e), file=self.log)
+        print(f"mysql error for stmt({stmt}) {e}", file=self.log)
 
   def finish(self):
     print("total time: %.2f s" % (time.time() - self.start_time), file=self.log)
@@ -171,7 +167,7 @@ class Worker(threading.Thread):
     try:
       self.runme()
     except Exception as e:
-      print("caught (%s)" % e, file=self.log)
+      print(f"caught ({e})", file=self.log)
     finally:
       self.finish()
 
@@ -186,27 +182,23 @@ class Worker(threading.Thread):
         stmt = None
 
         cur = self.con.cursor()
-        cur.execute("select count(*) from %s" % table_name)
+        cur.execute(f"select count(*) from {table_name}")
         row = cur.fetchone()
         num_rows = row[0]
 
         if not num_rows:
           time.sleep(1)
           cur.close()
-          print("sleep after 0 rows found in %s" % table_name, file=self.log)
+          print(f"sleep after 0 rows found in {table_name}", file=self.log)
           continue
 
-        if table_name in ['t3', 't4']:
-          max_len = 9000
-        else:
-          max_len = 240
-
+        max_len = 9000 if table_name in ['t3', 't4'] else 240
         msg = str(rng.randint(1,100000)) + ('z' * rng.randint(1,max_len))
         idx = self.rng.randint(1, num_rows)
 
         operation = self.rng.randint(1, 100)
         if operation < 70:
-          stmt = "INSERT INTO %s (msg,id) VALUES ('%s', NULL)" % (table_name, msg)
+          stmt = f"INSERT INTO {table_name} (msg,id) VALUES ('{msg}', NULL)"
           self.num_inserts += 1
 
         elif operation < 95:
@@ -221,9 +213,9 @@ class Worker(threading.Thread):
         cur.close()
 
       except MySQLdb.Error as e:
-        print("mysql error for stmt(%s) %s" % (stmt, e), file=self.log)
+        print(f"mysql error for stmt({stmt}) {e}", file=self.log)
 
-if  __name__ == '__main__':
+if __name__ == '__main__':
   global LG_TMP_DIR
   global shutdown_now
   global tables
@@ -242,49 +234,43 @@ if  __name__ == '__main__':
   db = 'test'
   workers = []
   server_pid = int(open(pid_file).read())
-  log = open('/%s/main.log' % LG_TMP_DIR, 'a')
+  with open(f'/{LG_TMP_DIR}/main.log', 'a') as log:
+    tables = ['t1', 't2', 't3', 't4'] if use_blob else ['t1', 't2']
+    rng = random.Random()
+    rng.seed(server_pid)
 
-  if use_blob:
-    tables = ['t1', 't2', 't3', 't4']
-  else:
-    tables = ['t1', 't2']
+    con = MySQLdb.connect(user=user, host=host, port=port, db=db)
+    con.autocommit(True)
+    create_tables(con, min_records, rng, log)
+    con.close()
+    log.flush()
 
-  rng = random.Random()
-  rng.seed(server_pid)
+    print("start %d threads" % num_workers, file=log)
+    for i in range(num_workers):
+      worker = Worker(i,
+                      MySQLdb.connect(user=user, host=host, port=port, db=db),
+                      server_pid)
+      worker.start()
+      workers.append(worker)
 
-  con = MySQLdb.connect(user=user, host=host, port=port, db=db)
-  con.autocommit(True)
-  create_tables(con, min_records, rng, log)
-  con.close()
-  log.flush()
+    log.flush()
 
-  print("start %d threads" % num_workers, file=log)
-  for i in range(num_workers):
-    worker = Worker(i,
-                    MySQLdb.connect(user=user, host=host, port=port, db=db),
-                    server_pid)
-    worker.start()
-    workers.append(worker)
+    dropper = Dropper(MySQLdb.connect(user=user, host=host, port=port, db=db),
+                      min_records, max_records, rng)
+    dropper.start()
 
-  log.flush()
+    print("wait for %d seconds" % test_seconds, file=log)
+    time.sleep(test_seconds)
+    shutdown_now = True
+    dropper.join()
 
-  dropper = Dropper(MySQLdb.connect(user=user, host=host, port=port, db=db),
-                    min_records, max_records, rng)
-  dropper.start()
+    print("wait for threads", file=log)
+    for w in workers:
+      w.join()
 
-  print("wait for %d seconds" % test_seconds, file=log)
-  time.sleep(test_seconds)
-  shutdown_now = True
-  dropper.join()
+    print("all threads done", file=log)
 
-  print("wait for threads", file=log)
-  for w in workers:
-    w.join()
-
-  print("all threads done", file=log)
-
-  con = MySQLdb.connect(user=user, host=host, port=port, db=db)
-  con.autocommit(True)
-  drop_tables(con, log)
-  con.close()
-  log.close()
+    con = MySQLdb.connect(user=user, host=host, port=port, db=db)
+    con.autocommit(True)
+    drop_tables(con, log)
+    con.close()

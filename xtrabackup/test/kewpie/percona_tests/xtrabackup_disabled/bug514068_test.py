@@ -42,17 +42,16 @@ class basicTest(mysqlBaseTestCase):
                    , stderr_path
                    , exec_path=None
                    , get_output=True):
-        stdout_file = open(stdout_path,'w')
-        stderr_file = open(stderr_path,'w')
-        cmd_subproc = subprocess.Popen( cmd
-                                      , shell=True
-                                      , cwd=exec_path
-                                      , stdout = stdout_file
-                                      , stderr = stderr_file 
-                                      )
-        cmd_subproc.wait()
-        retcode = cmd_subproc.returncode
-        stdout_file.close()
+        with open(stdout_path,'w') as stdout_file:
+            stderr_file = open(stderr_path,'w')
+            cmd_subproc = subprocess.Popen( cmd
+                                          , shell=True
+                                          , cwd=exec_path
+                                          , stdout = stdout_file
+                                          , stderr = stderr_file 
+                                          )
+            cmd_subproc.wait()
+            retcode = cmd_subproc.returncode
         stderr_file.close()
         if get_output:
             data_file = open(stdout_path,'r')
@@ -62,16 +61,15 @@ class basicTest(mysqlBaseTestCase):
         return retcode, output
 
     def execute_cmd2(self, cmd, stdout_path, exec_path=None, get_output=False):
-        stdout_file = open(stdout_path,'w')
-        cmd_subproc = subprocess.Popen( cmd
-                                      , shell=True
-                                      , cwd=exec_path
-                                      , stdout = stdout_file
-                                      , stderr = subprocess.STDOUT
-                                      )
-        cmd_subproc.wait()
-        retcode = cmd_subproc.returncode
-        stdout_file.close()
+        with open(stdout_path,'w') as stdout_file:
+            cmd_subproc = subprocess.Popen( cmd
+                                          , shell=True
+                                          , cwd=exec_path
+                                          , stdout = stdout_file
+                                          , stderr = subprocess.STDOUT
+                                          )
+            cmd_subproc.wait()
+            retcode = cmd_subproc.returncode
         if get_output:
             data_file = open(stdout_path,'r')
             output = ''.join(data_file.readlines())

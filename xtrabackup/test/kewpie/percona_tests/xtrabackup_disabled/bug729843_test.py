@@ -47,36 +47,36 @@ class basicTest(mysqlBaseTestCase):
         """ Ensure passwords are not logged in  """
         self.servers = servers
         logging = test_executor.logging
-        if servers[0].type not in ['mysql','percona']:
+        if servers[0].type not in ['mysql', 'percona']:
             return
-        else:
-            innobackupex = test_executor.system_manager.innobackupex_path
-            xtrabackup = test_executor.system_manager.xtrabackup_path
-            master_server = servers[0] # assumption that this is 'master'
-            backup_path = os.path.join(master_server.vardir, '_xtrabackup')
-            output_path = os.path.join(master_server.vardir, 'innobackupex.out')
-            exec_path = os.path.dirname(innobackupex)
+        innobackupex = test_executor.system_manager.innobackupex_path
+        xtrabackup = test_executor.system_manager.xtrabackup_path
+        master_server = servers[0] # assumption that this is 'master'
+        backup_path = os.path.join(master_server.vardir, '_xtrabackup')
+        output_path = os.path.join(master_server.vardir, 'innobackupex.out')
+        exec_path = os.path.dirname(innobackupex)
 
-            # populate our server with a test bed
-            test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
-            retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
-     
+        # populate our server with a test bed
+        test_cmd = "./gentest.pl --gendata=conf/percona/percona.zz"
+        retcode, output = self.execute_randgen(test_cmd, test_executor, master_server)
+
             # take a backup
-            cmd = [ innobackupex
-                  , "--defaults-file=%s" %master_server.cnf_file
-                  , "--user=root"
-                  , "--password=secret"
-                  , "--port=%d" %master_server.master_port
-                  , "--host=127.0.0.1"
-                  , "--no-timestamp"
-                  , "--ibbackup=%s" %xtrabackup
-                  , backup_path
-                  ]
-            cmd = " ".join(cmd)
-            retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
-            # It seems the retcode varies between 9 and 255 : /
-            accepted_values = [9,255]
-            self.assertTrue(retcode in accepted_values ,msg = "Retcode: %d || %s" %(retcode,output))
-            self.assertTrue("--password=secret" not in output, msg = output)
-            self.assertTrue("--password=xxxxxxxx" in output, msg = output)
+        cmd = [
+            innobackupex,
+            f"--defaults-file={master_server.cnf_file}",
+            "--user=root",
+            "--password=secret",
+            "--port=%d" % master_server.master_port,
+            "--host=127.0.0.1",
+            "--no-timestamp",
+            f"--ibbackup={xtrabackup}",
+            backup_path,
+        ]
+        cmd = " ".join(cmd)
+        retcode, output = self.execute_cmd(cmd, output_path, exec_path, True)
+        # It seems the retcode varies between 9 and 255 : /
+        accepted_values = [9,255]
+        self.assertTrue(retcode in accepted_values ,msg = "Retcode: %d || %s" %(retcode,output))
+        self.assertTrue("--password=secret" not in output, msg = output)
+        self.assertTrue("--password=xxxxxxxx" in output, msg = output)
               

@@ -60,10 +60,7 @@ class testCase:
             self.system_manager.logging.debug_class(self)
 
     def should_run(self):
-        if self.skip_flag or self.disable:
-            return 0
-        else:
-            return 1
+        return 0 if self.skip_flag or self.disable else 1
 
  
         
@@ -91,22 +88,20 @@ class testManager(test_management.testManager):
         """
 
         # We know this based on how we organize sysbench test conf files
-        suite_name = os.path.basename(suite_dir) 
-        self.system_manager.logging.verbose("Processing suite: %s" %(suite_name))
+        suite_name = os.path.basename(suite_dir)
+        self.system_manager.logging.verbose(f"Processing suite: {suite_name}")
         testlist = [os.path.join(suite_dir,test_file) for test_file in sorted(os.listdir(suite_dir)) if test_file.endswith('.cnf')]
 
         # Search for specific test names
         if self.desired_tests: # We have specific, named tests we want from the suite(s)
-           tests_to_use = []
-           for test in self.desired_tests:
-               if test.endswith('.cnf'): 
-                   pass
-               else:
-                   test = test+'.cnf'
-               test = os.path.join(suite_dir,test)
-               if test in testlist:
-                   tests_to_use.append(test)
-           testlist = tests_to_use
+            tests_to_use = []
+            for test in self.desired_tests:
+                if not test.endswith('.cnf'):
+                    test = f'{test}.cnf'
+                test = os.path.join(suite_dir,test)
+                if test in testlist:
+                    tests_to_use.append(test)
+            testlist = tests_to_use
         for test_case in testlist:
             self.add_test(self.process_test_file(suite_name, test_case))
 
@@ -121,13 +116,15 @@ class testManager(test_management.testManager):
         test_comment = config_reader.get('test_info','comment')
         server_requirements = self.process_server_reqs(config_reader.get('test_servers','servers'))
         test_command = config_reader.get('test_command','command')
-        return testCase( self.system_manager
-                       , name = test_name
-                       , fullname = "%s.%s" %(suite_name, test_name)
-                       , server_requirements = server_requirements
-                       , test_command = test_command
-                       , cnf_path = testfile
-                       , debug = self.debug )
+        return testCase(
+            self.system_manager,
+            name=test_name,
+            fullname=f"{suite_name}.{test_name}",
+            server_requirements=server_requirements,
+            test_command=test_command,
+            cnf_path=testfile,
+            debug=self.debug,
+        )
 
         #sys.exit(0)
 
@@ -136,13 +133,10 @@ class testManager(test_management.testManager):
             handle this / break it down into proper chunks
 
         """
-        server_reqs = []
         # We expect to see a list of lists and throw away the 
         # enclosing brackets
         option_sets = data_string[1:-1].strip().split(',')
-        for option_set in option_sets:
-            server_reqs.append([option_set[1:-1].strip()])
-        return server_reqs
+        return [[option_set[1:-1].strip()] for option_set in option_sets]
 
     def record_test_result(self, test_case, test_status, output, exec_time):
         """ Accept the results of an executed testCase for further

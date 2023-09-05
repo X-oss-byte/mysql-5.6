@@ -192,6 +192,7 @@ class TestAttachFile(TestCase):
         self.assertEqual([base_path], list(test.getDetails()))
 
     def test_lazy_read(self):
+
         class SomeTest(TestCase):
             def test_foo(self):
                 pass
@@ -199,12 +200,12 @@ class TestAttachFile(TestCase):
         path = self.make_file('some data')
         attach_file(test, path, name='foo', buffer_now=False)
         content = test.getDetails()['foo']
-        content_file = open(path, 'w')
-        content_file.write('new data')
-        content_file.close()
+        with open(path, 'w') as content_file:
+            content_file.write('new data')
         self.assertEqual(''.join(content.iter_bytes()), 'new data')
 
     def test_eager_read_by_default(self):
+
         class SomeTest(TestCase):
             def test_foo(self):
                 pass
@@ -212,9 +213,8 @@ class TestAttachFile(TestCase):
         path = self.make_file('some data')
         attach_file(test, path, name='foo')
         content = test.getDetails()['foo']
-        content_file = open(path, 'w')
-        content_file.write('new data')
-        content_file.close()
+        with open(path, 'w') as content_file:
+            content_file.write('new data')
         self.assertEqual(''.join(content.iter_bytes()), 'some data')
 
 

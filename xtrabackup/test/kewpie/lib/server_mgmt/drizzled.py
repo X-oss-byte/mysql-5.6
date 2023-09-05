@@ -52,7 +52,7 @@ class drizzleServer(Server):
                                            , test_executor
                                            , workdir_root)
         self.preferred_base_port = 9306
-                
+
         # client files
         self.drizzledump = self.code_tree.drizzledump
         self.drizzle_client = self.code_tree.drizzle_client
@@ -75,16 +75,15 @@ class drizzleServer(Server):
         self.json_server_port = self.port_block[5]
 
         # Generate our working directories
-        self.dirset = {'var_%s' %(self.name): {'std_data_ln':( os.path.join(self.code_tree.testdir,'std_data'))
-                                               ,'log':None
-                                               ,'run':None
-                                               ,'tmp':None
-                                               ,'master-data': {'local': { 'test':None
-                                                                         , 'mysql':None
-                                                                         }
-                                                               }
-                                               }  
-                      }
+        self.dirset = {
+            f'var_{self.name}': {
+                'std_data_ln': (os.path.join(self.code_tree.testdir, 'std_data')),
+                'log': None,
+                'run': None,
+                'tmp': None,
+                'master-data': {'local': {'test': None, 'mysql': None}},
+            }
+        }
         self.workdir = self.system_manager.create_dirset( workdir_root
                                                         , self.dirset)
         self.vardir = self.workdir
@@ -94,16 +93,16 @@ class drizzleServer(Server):
         self.datadir = os.path.join(self.vardir,'master-data')
 
         self.error_log = os.path.join(self.logdir,'error.log')
-        self.pid_file = os.path.join(self.rundir,('%s.pid' %(self.name)))
-        self.socket_file = os.path.join(self.vardir, ('%s.sock' %(self.name)))
+        self.pid_file = os.path.join(self.rundir, f'{self.name}.pid')
+        self.socket_file = os.path.join(self.vardir, f'{self.name}.sock')
         if len(self.socket_file) > 107:
             # MySQL has a limitation of 107 characters for socket file path
             # we copy the mtr workaround of creating one in /tmp
-            self.logging.verbose("Default socket file path: %s" %(self.socket_file))
-            self.socket_file = "/tmp/%s_%s.%s.sock" %(self.system_manager.uuid
-                                                    ,self.owner
-                                                    ,self.name)
-            self.logging.verbose("Changing to alternate: %s" %(self.socket_file))
+            self.logging.verbose(f"Default socket file path: {self.socket_file}")
+            self.socket_file = (
+                f"/tmp/{self.system_manager.uuid}_{self.owner}.{self.name}.sock"
+            )
+            self.logging.verbose(f"Changing to alternate: {self.socket_file}")
         self.timer_file = os.path.join(self.logdir,('timer'))
 
         # Do magic to create a config file for use with the slave
@@ -111,13 +110,13 @@ class drizzleServer(Server):
         self.slave_config_file = os.path.join(self.logdir,'slave.cnf')
         self.create_slave_config_file()
 
-        self.snapshot_path = os.path.join(self.tmpdir,('snapshot_%s' %(self.master_port)))
+        self.snapshot_path = os.path.join(self.tmpdir, f'snapshot_{self.master_port}')
         # We want to use --secure-file-priv = $vardir by default
         # but there are times / tools when we need to shut this off
         if self.no_secure_file_priv:
             self.secure_file_string = ''
         else:
-            self.secure_file_string = "--secure-file-priv='%s'" %(self.vardir)
+            self.secure_file_string = f"--secure-file-priv='{self.vardir}'"
         self.user_string = '--user=root'
 
         self.initialize_databases()
@@ -136,10 +135,10 @@ class drizzleServer(Server):
                         , 'vardir'
                         , 'status'
                         ]
-        self.logging.info("%s server:" %(self.owner))
+        self.logging.info(f"{self.owner} server:")
         for key in report_values:
-          value = vars(self)[key] 
-          self.logging.info("%s: %s" %(key.upper(), value))
+            value = vars(self)[key]
+            self.logging.info(f"{key.upper()}: {value}")
 
     def get_start_cmd(self):
         """ Return the command string that will start up the server 
@@ -147,30 +146,27 @@ class drizzleServer(Server):
  
         """
 
-        server_args = [ self.process_server_options()
-                      , "--mysql-protocol.port=%d" %(self.master_port)
-                      , "--mysql-protocol.connect-timeout=60"
-                      , "--innodb.data-file-path=ibdata1:20M:autoextend"
-                      , "--sort-buffer-size=256K"
-                      , "--max-heap-table-size=1M"
-                      , "--mysql-unix-socket-protocol.path=%s" %(self.socket_file)
-                      , "--pid-file=%s" %(self.pid_file)
-                      , "--drizzle-protocol.port=%d" %(self.drizzle_tcp_port)
-                      , "--default-storage-engine=%s" %(self.default_storage_engine)
-                      , "--datadir=%s" %(self.datadir)
-                      , "--tmpdir=%s" %(self.tmpdir)
-                      , self.secure_file_string
-                      , self.user_string
-                      ]
+        server_args = [
+            self.process_server_options(),
+            "--mysql-protocol.port=%d" % (self.master_port),
+            "--mysql-protocol.connect-timeout=60",
+            "--innodb.data-file-path=ibdata1:20M:autoextend",
+            "--sort-buffer-size=256K",
+            "--max-heap-table-size=1M",
+            f"--mysql-unix-socket-protocol.path={self.socket_file}",
+            f"--pid-file={self.pid_file}",
+            "--drizzle-protocol.port=%d" % (self.drizzle_tcp_port),
+            f"--default-storage-engine={self.default_storage_engine}",
+            f"--datadir={self.datadir}",
+            f"--tmpdir={self.tmpdir}",
+            self.secure_file_string,
+            self.user_string,
+        ]
 
-        if self.gdb:
-            server_args.append('--gdb')
-            return self.system_manager.handle_gdb_reqs(self, server_args)
-        else:
-            return "%s %s %s & " % ( self.cmd_prefix
-                                   , self.server_path
-                                   , " ".join(server_args)
-                                   )
+        if not self.gdb:
+            return f'{self.cmd_prefix} {self.server_path} {" ".join(server_args)} & '
+        server_args.append('--gdb')
+        return self.system_manager.handle_gdb_reqs(self, server_args)
 
 
     def get_stop_cmd(self):
@@ -201,24 +197,23 @@ class drizzleServer(Server):
                                             , required=0)
 
     def create_slave_config_file(self):
-       """ Create a config file suitable for use
+        """ Create a config file suitable for use
            with the slave-plugin.  This allows
            us to tie other servers in easily
 
        """
 
-       config_data = [ "[master1]"
-                     , "master-host=127.0.0.1"
-                     , "master-port=%d" %self.master_port
-                     , "master-user=root"
-                     , "master-pass=''"
-                     , "max-reconnects=100"
-                     #, "seconds-between-reconnects=20"
-                     ]
-       outfile = open(self.slave_config_file,'w')
-       for line in config_data:
-           outfile.write("%s\n" %(line))
-       outfile.close()
+        config_data = [ "[master1]"
+                      , "master-host=127.0.0.1"
+                      , "master-port=%d" %self.master_port
+                      , "master-user=root"
+                      , "master-pass=''"
+                      , "max-reconnects=100"
+                      #, "seconds-between-reconnects=20"
+                      ]
+        with open(self.slave_config_file,'w') as outfile:
+            for line in config_data:
+                outfile.write("%s\n" %(line))
 
 
 

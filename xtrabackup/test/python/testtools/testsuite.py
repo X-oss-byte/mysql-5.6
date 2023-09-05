@@ -26,8 +26,7 @@ def iterate_tests(test_suite_or_case):
         yield test_suite_or_case
     else:
         for test in suite:
-            for subtest in iterate_tests(test):
-                yield subtest
+            yield from iterate_tests(test)
 
 
 class ConcurrentTestSuite(unittest.TestSuite):

@@ -22,12 +22,10 @@ class ContentType(object):
         self.parameters = parameters or {}
 
     def __eq__(self, other):
-        if type(other) != ContentType:
-            return False
-        return self.__dict__ == other.__dict__
+        return False if type(other) != ContentType else self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "%s/%s params=%s" % (self.type, self.subtype, self.parameters)
+        return f"{self.type}/{self.subtype} params={self.parameters}"
 
 
 UTF8_TEXT = ContentType('text', 'plain', {'charset': 'utf8'})

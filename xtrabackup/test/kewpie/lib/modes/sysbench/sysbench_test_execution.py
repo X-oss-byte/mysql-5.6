@@ -66,24 +66,22 @@ class testExecutor(test_execution.testExecutor):
         """
       
         sysbench_outfile = os.path.join(self.logdir,'sysbench.out')
-        sysbench_output = open(sysbench_outfile,'w')
-        sysbench_cmd = ' '.join([self.current_testcase.test_command,'prepare'])      
-        self.logging.info("Preparing database for sysbench run...")
-        self.logging.debug(sysbench_cmd)
-        sysbench_subproc = subprocess.Popen( sysbench_cmd
-                                         , shell=True
-                                         #, cwd=os.getcwd()
-                                         , env=self.working_environment
-                                         , stdout = sysbench_output
-                                         , stderr = subprocess.STDOUT
-                                         )
-        sysbench_subproc.wait()
-        retcode = sysbench_subproc.returncode
+        with open(sysbench_outfile,'w') as sysbench_output:
+            sysbench_cmd = ' '.join([self.current_testcase.test_command,'prepare'])
+            self.logging.info("Preparing database for sysbench run...")
+            self.logging.debug(sysbench_cmd)
+            sysbench_subproc = subprocess.Popen( sysbench_cmd
+                                             , shell=True
+                                             #, cwd=os.getcwd()
+                                             , env=self.working_environment
+                                             , stdout = sysbench_output
+                                             , stderr = subprocess.STDOUT
+                                             )
+            sysbench_subproc.wait()
+            retcode = sysbench_subproc.returncode
 
-        sysbench_output.close()
-        sysbench_file = open(sysbench_outfile,'r')
-        output = ''.join(sysbench_file.readlines())
-        sysbench_file.close()
+        with open(sysbench_outfile,'r') as sysbench_file:
+            output = ''.join(sysbench_file.readlines())
         self.logging.debug("sysbench_retcode: %d" %(retcode))
         self.logging.debug(output)
         if retcode:
@@ -103,27 +101,24 @@ class testExecutor(test_execution.testExecutor):
         testcase_name = self.current_testcase.fullname
         self.time_manager.start(testcase_name,'test')
         sysbench_outfile = os.path.join(self.logdir,'sysbench.out')
-        sysbench_output = open(sysbench_outfile,'w')
-        sysbench_cmd = ' '.join([self.current_testcase.test_command, 'run'])
-        self.logging.info("Executing sysbench:  %s" %(sysbench_cmd))
-        
-        sysbench_subproc = subprocess.Popen( sysbench_cmd
-                                         , shell=True
-                                         #, cwd=self.system_manager.sysbench_path
-                                         , env=self.working_environment
-                                         , stdout = sysbench_output
-                                         , stderr = subprocess.STDOUT
-                                         )
-        sysbench_subproc.wait()
-        retcode = sysbench_subproc.returncode     
-        execution_time = int(self.time_manager.stop(testcase_name)*1000) # millisec
+        with open(sysbench_outfile,'w') as sysbench_output:
+            sysbench_cmd = ' '.join([self.current_testcase.test_command, 'run'])
+            self.logging.info(f"Executing sysbench:  {sysbench_cmd}")
 
-        sysbench_output.close()
-        sysbench_file = open(sysbench_outfile,'r')
-        output = ''.join(sysbench_file.readlines())
-        self.logging.debug(output)
-        sysbench_file.close()
+            sysbench_subproc = subprocess.Popen( sysbench_cmd
+                                             , shell=True
+                                             #, cwd=self.system_manager.sysbench_path
+                                             , env=self.working_environment
+                                             , stdout = sysbench_output
+                                             , stderr = subprocess.STDOUT
+                                             )
+            sysbench_subproc.wait()
+            retcode = sysbench_subproc.returncode
+            execution_time = int(self.time_manager.stop(testcase_name)*1000) # millisec
 
+        with open(sysbench_outfile,'r') as sysbench_file:
+            output = ''.join(sysbench_file.readlines())
+            self.logging.debug(output)
         self.logging.debug("sysbench_retcode: %d" %(retcode))
         self.current_test_retcode = retcode
         self.current_test_output = output
@@ -147,16 +142,12 @@ class testExecutor(test_execution.testExecutor):
         }
         run= {}
         for line in self.current_test_output.split("\n"):
-            for key in regexes.keys():
-                result= regexes[key].match(line)
-                if result:
+            for key in regexes:
+                if result := regexes[key].match(line):
                     run[key]= float(result.group(1)) # group(0) is entire match...
         # we set our test output to the regex'd-up data
         # we also make it a single string, separated by newlines
         self.current_test_output = str(run)[1:-1].replace(',','\n').replace("'",'')
-                    
-        if self.current_test_retcode == 0:
-            return 'pass'
-        else:
-            return 'fail'
+
+        return 'pass' if self.current_test_retcode == 0 else 'fail'
 

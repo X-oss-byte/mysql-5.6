@@ -86,14 +86,13 @@ class environmentManager():
 
         """
         new_var_value = ""
-        if var_name in os.environ:
-            cur_var_value = os.environ[var_name]
-            if suffix: # We add new values to end of existing value
-                new_var_values = [ cur_var_value, append_string ]
-            else:
-                new_var_values = [ append_string, cur_var_value ]
-            new_var_value = self.env_var_delimiter.join(new_var_values)
-        else:
+        if var_name not in os.environ:
             # No existing variable value
-            new_var_value = append_string
-        return new_var_value
+            return append_string
+        cur_var_value = os.environ[var_name]
+        new_var_values = (
+            [cur_var_value, append_string]
+            if suffix
+            else [append_string, cur_var_value]
+        )
+        return self.env_var_delimiter.join(new_var_values)

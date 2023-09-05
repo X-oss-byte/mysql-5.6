@@ -166,7 +166,7 @@ class EngineTestAppDriver(Driver):
         return 'test_' + '_'.join(a.name for a in seq)
 
     def startSequence(self, seq):
-        f = "static enum test_result %s" % self.testName(seq)
+        f = f"static enum test_result {self.testName(seq)}"
         print ("%s(ENGINE_HANDLE *h,\n%sENGINE_HANDLE_V1 *h1) {"
                % (f, " " * (len(f) + 1)))
 

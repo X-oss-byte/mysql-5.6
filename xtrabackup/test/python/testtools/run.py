@@ -146,9 +146,9 @@ class TestProgram(object):
         self.testRunner = testRunner
         self.testLoader = testLoader
         progName = argv[0]
-        if progName.endswith('%srun.py' % os.path.sep):
+        if progName.endswith(f'{os.path.sep}run.py'):
             elements = progName.split(os.path.sep)
-            progName = '%s.run' % elements[-2]
+            progName = f'{elements[-2]}.run'
         else:
             progName = os.path.basename(argv[0])
         self.progName = progName
@@ -163,7 +163,7 @@ class TestProgram(object):
                 lines = source.readlines()
             finally:
                 source.close()
-            test_ids = set(line.strip() for line in lines)
+            test_ids = {line.strip() for line in lines}
             filtered = unittest.TestSuite()
             for test in iterate_tests(self.test):
                 if test.id() in test_ids:
@@ -245,7 +245,7 @@ class TestProgram(object):
         if not have_discover:
             raise AssertionError("Unable to use discovery, must use python 2.7 "
                     "or greater, or install the discover package.")
-        self.progName = '%s discover' % self.progName
+        self.progName = f'{self.progName} discover'
         import optparse
         parser = optparse.OptionParser()
         parser.prog = self.progName

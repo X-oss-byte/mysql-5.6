@@ -16,6 +16,7 @@
 
 """Filter a subunit stream to get aggregate statistics."""
 
+
 from optparse import OptionParser
 import sys
 import unittest
@@ -42,14 +43,8 @@ else:
     output_to = file(options.output_to, 'wb')
 try:
     result = JUnitXmlResult(output_to)
-    if options.no_passthrough:
-        passthrough_stream = DiscardStream()
-    else:
-        passthrough_stream = None
-    if options.forward:
-        forward_stream = sys.stdout
-    else:
-        forward_stream = None
+    passthrough_stream = DiscardStream() if options.no_passthrough else None
+    forward_stream = sys.stdout if options.forward else None
     test = ProtocolTestCase(sys.stdin, passthrough=passthrough_stream,
        forward=forward_stream)
     result.startTestRun()
@@ -58,8 +53,5 @@ try:
 finally:
     if options.output_to is not None:
         output_to.close()
-if result.wasSuccessful():
-    exit_code = 0
-else:
-    exit_code = 1
+exit_code = 0 if result.wasSuccessful() else 1
 sys.exit(exit_code)

@@ -90,8 +90,9 @@ xfail todo
 
     def test_fixup_expected_failures(self):
         filtered_result = unittest.TestResult()
-        result_filter = TestResultFilter(filtered_result,
-            fixup_expected_failures=set(["failed"]))
+        result_filter = TestResultFilter(
+            filtered_result, fixup_expected_failures={"failed"}
+        )
         self.run_tests(result_filter)
         self.assertEqual(['failed', 'todo'],
             [failure[0].id() for failure in filtered_result.expectedFailures])
@@ -100,8 +101,9 @@ xfail todo
 
     def test_fixup_expected_errors(self):
         filtered_result = unittest.TestResult()
-        result_filter = TestResultFilter(filtered_result,
-            fixup_expected_failures=set(["error"]))
+        result_filter = TestResultFilter(
+            filtered_result, fixup_expected_failures={"error"}
+        )
         self.run_tests(result_filter)
         self.assertEqual(['error', 'todo'],
             [failure[0].id() for failure in filtered_result.expectedFailures])
@@ -110,8 +112,11 @@ xfail todo
 
     def test_fixup_unexpected_success(self):
         filtered_result = unittest.TestResult()
-        result_filter = TestResultFilter(filtered_result, filter_success=False,
-            fixup_expected_failures=set(["passed"]))
+        result_filter = TestResultFilter(
+            filtered_result,
+            filter_success=False,
+            fixup_expected_failures={"passed"},
+        )
         self.run_tests(result_filter)
         self.assertEqual(['passed'],
             [passed.id() for passed in filtered_result.unexpectedSuccesses])
@@ -204,5 +209,4 @@ xfail todo
 
 def test_suite():
     loader = subunit.tests.TestUtil.TestLoader()
-    result = loader.loadTestsFromName(__name__)
-    return result
+    return loader.loadTestsFromName(__name__)

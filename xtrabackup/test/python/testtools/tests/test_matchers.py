@@ -498,7 +498,7 @@ class TestMatchesListwise(TestCase):
         failure_count, output = run_doctest(
             MatchesListwise, "MatchesListwise")
         if failure_count:
-            self.fail("Doctest failed with %s" % output)
+            self.fail(f"Doctest failed with {output}")
 
 
 class TestMatchesStructure(TestCase, TestMatchersInterface):
@@ -579,13 +579,12 @@ class TestMatchesSetwise(TestCase):
                                               description_matcher):
         mismatch = matcher.match(value)
         if mismatch is None:
-            self.fail("%s matched %s" % (matcher, value))
+            self.fail(f"{matcher} matched {value}")
         actual_description = mismatch.describe()
         self.assertThat(
             actual_description,
-            Annotate(
-                "%s matching %s" % (matcher, value),
-                description_matcher))
+            Annotate(f"{matcher} matching {value}", description_matcher),
+        )
 
     def test_matches(self):
         self.assertIs(
@@ -651,8 +650,8 @@ class TestMatchesSetwise(TestCase):
 
 class TestAfterPreproccessing(TestCase, TestMatchersInterface):
 
-    def parity(x):
-        return x % 2
+    def parity(self):
+        return self % 2
 
     matches_matcher = AfterPreproccessing(parity, Equals(1))
     matches_matches = [3, 5]

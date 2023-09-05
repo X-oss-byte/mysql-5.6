@@ -127,10 +127,8 @@ def make_integration_tests():
     for runner_name, runner in runners:
         for test in tests:
             new_test = clone_test_with_new_id(
-                base_test, '%s(%s, %s)' % (
-                    base_test.id(),
-                    runner_name,
-                    test.__name__))
+                base_test, f'{base_test.id()}({runner_name}, {test.__name__})'
+            )
             new_test.test_factory = test
             new_test.runner = runner
             integration_tests.append(new_test)

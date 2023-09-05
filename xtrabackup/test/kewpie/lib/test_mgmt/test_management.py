@@ -90,11 +90,12 @@ class testManager(object):
             self.suitelist = ['main']
         # END horrible hack
         for suite in self.suitelist:
-            suite_path = self.find_suite_path(suite)
-            if suite_path:
+            if suite_path := self.find_suite_path(suite):
                 self.process_suite(suite_path)
             else:
-                self.logging.error("Could not find suite: %s in any of paths: %s" %(suite, ", ".join(self.suitepaths)))
+                self.logging.error(
+                    f'Could not find suite: {suite} in any of paths: {", ".join(self.suitepaths)}'
+                )
         self.process_gathered_tests()
 
     def process_gathered_tests(self):
@@ -113,12 +114,14 @@ class testManager(object):
             # Probably need to make this smarter at some point
             # To maybe make sure that we found all of the desired tests...
             # However, this is a start / placeholder code
-            self.logging.error("Unable to locate any of the desired tests: %s" %(" ,".join(self.desired_tests)))   
-        self.total_test_count = len(self.test_list)     
+            self.logging.error(
+                f'Unable to locate any of the desired tests: {" ,".join(self.desired_tests)}'
+            )
+        self.total_test_count = len(self.test_list)
         self.logging.info("Found %d test(s) for execution" %(self.total_test_count))
-        
+
         self.logging.debug("Found tests:")
-        self.logging.debug("%s" %(self.print_test_list()))
+        self.logging.debug(f"{self.print_test_list()}")
 
     def find_suite_path(self, suitename):
         """ We have a suitename, we need to locate the path to
@@ -156,7 +159,7 @@ class testManager(object):
            to the rest of the test-runner
         
         """
-        self.logging.verbose("Processing suite: %s" %(suite))
+        self.logging.verbose(f"Processing suite: {suite}")
 
     def has_tests(self):
         """Return 1 if we have tests in our testlist, 0 otherwise"""
@@ -196,19 +199,14 @@ class testManager(object):
         # report.  If the test failed, we print any additional
         # output returned by the test executor
         # We may want to report additional output at other times
-        if test_status != 'pass':
-            report_output = True
-        else:
-            report_output = False
+        report_output = test_status != 'pass'
         self.logging.test_report( test_case.fullname, test_status
                                 , exec_time, output, report_output)
 
 
     def print_test_list(self):
-        test_names = []
-        for test in self.test_list:
-            test_names.append(test.fullname)
-        return "[ %s ]" %(", ".join(test_names))
+        test_names = [test.fullname for test in self.test_list]
+        return f'[ {", ".join(test_names)} ]'
 
     def statistical_report(self):
         """ Report out various testing statistics:
@@ -274,11 +272,11 @@ class testManager(object):
 
 
     def report_tests_by_status(self, status):
-        matching_tests = []
         if status in self.executed_tests:
-            for testcase in self.executed_tests[status]:
-                matching_tests.append(testcase.fullname)
-            self.logging.info("%s tests: %s" %(status.upper(), ", ".join(matching_tests)))
+            matching_tests = [
+                testcase.fullname for testcase in self.executed_tests[status]
+            ]
+            self.logging.info(f'{status.upper()} tests: {", ".join(matching_tests)}')
 
     def get_count_by_status(self, test_status):
         """ Return how many tests are in a given test_status """

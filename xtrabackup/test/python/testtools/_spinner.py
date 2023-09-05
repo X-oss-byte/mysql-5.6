@@ -220,17 +220,13 @@ class Spinner(object):
         work (e.g. cancelling a call, actually closing a connection) for the
         reactor to do.
         """
-        for i in range(self._OBLIGATORY_REACTOR_ITERATIONS):
+        for _ in range(self._OBLIGATORY_REACTOR_ITERATIONS):
             self._reactor.iterate(0)
         junk = []
         for delayed_call in self._reactor.getDelayedCalls():
             delayed_call.cancel()
             junk.append(delayed_call)
-        for selectable in self._reactor.removeAll():
-            # Twisted sends a 'KILL' signal to selectables that provide
-            # IProcessTransport.  Since only _dumbwin32proc processes do this,
-            # we aren't going to bother.
-            junk.append(selectable)
+        junk.extend(iter(self._reactor.removeAll()))
         if IReactorThreads.providedBy(self._reactor):
             if self._reactor.threadpool is not None:
                 self._reactor._stopThreadPool()

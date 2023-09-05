@@ -93,11 +93,17 @@ class TestJUnitXmlResult(unittest.TestCase):
         self.assertTrue('tests="2"' in output)
 
     def test_test_id_with_parameter(self):
+
+
+
         class Passes(unittest.TestCase):
             def id(self):
-                return unittest.TestCase.id(self) + '(version_1.6)'
+                return f'{unittest.TestCase.id(self)}(version_1.6)'
+
             def test_me(self):
                 pass
+
+
         self.result.startTestRun()
         Passes("test_me").run(self.result)
         self.result.stopTestRun()
@@ -162,6 +168,7 @@ class TestJUnitXmlResult(unittest.TestCase):
         self.assertEqual(expected, output)
 
     def test_unexpected_success_test(self):
+
         class Succeeds(unittest.TestCase):
             def test_me(self):
                 pass
@@ -173,17 +180,17 @@ class TestJUnitXmlResult(unittest.TestCase):
         Succeeds("test_me").run(self.result)
         self.result.stopTestRun()
         output = self.get_output()
-        expected = """<testsuite errors="0" failures="1" name="" tests="1" time="0.000">
-<testcase classname="junitxml.tests.test_junitxml.Succeeds" name="test_me" time="0.000">
-<failure type="unittest.case._UnexpectedSuccess"/>
-</testcase>
-</testsuite>
-"""
         expected_old = """<testsuite errors="0" failures="0" name="" tests="1" time="0.000">
 <testcase classname="junitxml.tests.test_junitxml.Succeeds" name="test_me" time="0.000"/>
 </testsuite>
 """
         if output != expected_old:
+            expected = """<testsuite errors="0" failures="1" name="" tests="1" time="0.000">
+<testcase classname="junitxml.tests.test_junitxml.Succeeds" name="test_me" time="0.000">
+<failure type="unittest.case._UnexpectedSuccess"/>
+</testcase>
+</testsuite>
+"""
             self.assertEqual(expected, output)
 
     def test_expected_failure_test(self):
@@ -200,19 +207,19 @@ class TestJUnitXmlResult(unittest.TestCase):
         ExpectedFail("test_me").run(self.result)
         self.result.stopTestRun()
         output = self.get_output()
-        expected = """<testsuite errors="0" failures="0" name="" tests="1" time="0.000">
+        if expected_failure_support[0]:
+            expected = """<testsuite errors="0" failures="0" name="" tests="1" time="0.000">
 <testcase classname="junitxml.tests.test_junitxml.ExpectedFail" name="test_me" time="0.000"/>
 </testsuite>
 """
-        expected_old = """<testsuite errors="0" failures="1" name="" tests="1" time="0.000">
+            self.assertEqual(expected, output)
+        else:
+            expected_old = """<testsuite errors="0" failures="1" name="" tests="1" time="0.000">
 <testcase classname="junitxml.tests.test_junitxml.ExpectedFail" name="test_me" time="0.000">
 <failure type="AssertionError">failure</failure>
 </testcase>
 </testsuite>
 """
-        if expected_failure_support[0]:
-            self.assertEqual(expected, output)
-        else:
             self.assertEqual(expected_old, output)
 
 
@@ -239,11 +246,16 @@ class TestWellFormedXml(unittest.TestCase):
 
     def test_quotes_in_test_case_id(self):
         """Check that quotes in an attribute are escaped"""
+
+
         class QuoteId(unittest.TestCase):
             def id(self):
-                return unittest.TestCase.id(self) + '("quotes")'
+                return f'{unittest.TestCase.id(self)}("quotes")'
+
             def runTest(self):
                 pass
+
+
         doc = self._run_and_parse_test(QuoteId())
         self.assertEqual('runTest("quotes")',
             doc.getElementsByTagName("testcase")[0].getAttribute("name"))
@@ -320,8 +332,6 @@ class TestWellFormedXml(unittest.TestCase):
                 raise exception
         doc = self._run_and_parse_test(ErrorWithSurrogates())
         traceback = doc.getElementsByTagName("error")[0].firstChild.nodeValue
-        if sys.maxunicode == 0xFFFF:
-            pass # would be nice to handle astral characters properly even so
-        else:
+        if sys.maxunicode != 0xFFFF:
             self.assertTrue(astral_char in traceback)
         self.assertTrue(traceback.endswith(" unpaired: -\n"))

@@ -673,13 +673,15 @@ class TestProtocolClient(testresult.TestResult):
         :param error_permitted: If True then one and only one of error or
             details must be supplied. If False then error must not be supplied
             and details is still optional.  """
-        self._stream.write(_b("%s: %s" % (outcome, test.id())))
-        if error_permitted:
-            if error is None and details is None:
-                raise ValueError
-        else:
-            if error is not None:
-                raise ValueError
+        self._stream.write(_b(f"{outcome}: {test.id()}"))
+        if (
+            error_permitted
+            and error is None
+            and details is None
+            or not error_permitted
+            and error is not None
+        ):
+            raise ValueError
         if error is not None:
             self._stream.write(self._start_simple)
             # XXX: this needs to be made much stricter, along the lines of
@@ -772,14 +774,14 @@ class TestProtocolClient(testresult.TestResult):
         """
         self._stream.write(_b(" [ multipart\n"))
         for name, content in sorted(details.items()):
-            self._stream.write(_b("Content-Type: %s/%s" %
-                (content.content_type.type, content.content_type.subtype)))
-            parameters = content.content_type.parameters
-            if parameters:
+            self._stream.write(
+                _b(
+                    f"Content-Type: {content.content_type.type}/{content.content_type.subtype}"
+                )
+            )
+            if parameters := content.content_type.parameters:
                 self._stream.write(_b(";"))
-                param_strs = []
-                for param, value in parameters.items():
-                    param_strs.append("%s=%s" % (param, value))
+                param_strs = [f"{param}={value}" for param, value in parameters.items()]
                 self._stream.write(_b(",".join(param_strs)))
             self._stream.write(_b("\n%s\n" % name))
             encoder = chunked.Encoder(self._stream)
@@ -815,8 +817,7 @@ class RemotedTestCase(unittest.TestCase):
         self.__description = description
 
     def error(self, label):
-        raise NotImplementedError("%s on RemotedTestCases is not permitted." %
-            label)
+        raise NotImplementedError(f"{label} on RemotedTestCases is not permitted.")
 
     def setUp(self):
         self.error("setUp")
@@ -828,14 +829,13 @@ class RemotedTestCase(unittest.TestCase):
         return self.__description
 
     def id(self):
-        return "%s" % (self.__description,)
+        return f"{self.__description}"
 
     def __str__(self):
-        return "%s (%s)" % (self.__description, self._strclass())
+        return f"{self.__description} ({self._strclass()})"
 
     def __repr__(self):
-        return "<%s description='%s'>" % \
-               (self._strclass(), self.__description)
+        return f"<{self._strclass()} description='{self.__description}'>"
 
     def run(self, result=None):
         if result is None: result = self.defaultTestResult()
@@ -845,7 +845,7 @@ class RemotedTestCase(unittest.TestCase):
 
     def _strclass(self):
         cls = self.__class__
-        return "%s.%s" % (cls.__module__, cls.__name__)
+        return f"{cls.__module__}.{cls.__name__}"
 
 
 class ExecTestCase(unittest.TestCase):
@@ -967,6 +967,7 @@ def TAP2SubUnit(tap, subunit):
         subunit.write('test missing from TAP output\n')
         subunit.write(']\n')
         return plan_start + 1
+
     # Test data for the next test to emit
     test_name = None
     log = []
@@ -985,6 +986,7 @@ def TAP2SubUnit(tap, subunit):
                 subunit.write("%s\n" % line)
             subunit.write("]\n")
         del log[:]
+
     for line in tap:
         if state == BEFORE_PLAN:
             match = re.match("(\d+)\.\.(\d+)\s*(?:\#\s+(.*))?\n", line)
@@ -1006,14 +1008,8 @@ def TAP2SubUnit(tap, subunit):
             # new test, emit current one.
             _emit_test()
             status, number, description, directive, directive_comment = match.groups()
-            if status == 'ok':
-                result = 'success'
-            else:
-                result = "failure"
-            if description is None:
-                description = ''
-            else:
-                description = ' ' + description
+            result = 'success' if status == 'ok' else "failure"
+            description = '' if description is None else f' {description}'
             if directive is not None:
                 if directive.upper() == 'TODO':
                     result = 'xfail'
@@ -1031,12 +1027,9 @@ def TAP2SubUnit(tap, subunit):
         match = re.match("Bail out\!(?:\s*(.*))?\n", line)
         if match:
             reason, = match.groups()
-            if reason is None:
-                extra = ''
-            else:
-                extra = ' %s' % reason
+            extra = '' if reason is None else f' {reason}'
             _emit_test()
-            test_name = "Bail out!%s" % extra
+            test_name = f"Bail out!{extra}"
             result = "error"
             state = SKIP_STREAM
             continue
@@ -1081,8 +1074,9 @@ def tag_stream(original, filtered, tags):
             filtered.write("tags: " + ' '.join(new_tags))
             if gone_tags:
                 for tag in gone_tags:
-                    filtered.write("-" + tag)
+                    filtered.write(f"-{tag}")
             filtered.write("\n")
+
     write_tags(new_tags, gone_tags)
     # TODO: use the protocol parser and thus don't mangle test comments.
     for line in original:
@@ -1144,10 +1138,8 @@ class ProtocolTestCase(object):
         if result is None:
             result = self.defaultTestResult()
         protocol = TestProtocolServer(result, self._passthrough, self._forward)
-        line = self._stream.readline()
-        while line:
+        while line := self._stream.readline():
             protocol.lineReceived(line)
-            line = self._stream.readline()
         protocol.lostConnection()
 
 
@@ -1207,14 +1199,12 @@ def get_default_formatter():
 
     :return: A file-like object.
     """
-    formatter = os.getenv("SUBUNIT_FORMATTER")
-    if formatter:
+    if formatter := os.getenv("SUBUNIT_FORMATTER"):
         return os.popen(formatter, "w")
-    else:
-        stream = sys.stdout
-        if sys.version_info > (3, 0):
-            stream = stream.buffer
-        return stream
+    stream = sys.stdout
+    if sys.version_info > (3, 0):
+        stream = stream.buffer
+    return stream
 
 
 if sys.version_info > (3, 0):
